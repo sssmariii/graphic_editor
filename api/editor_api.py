@@ -4,6 +4,11 @@ from core.canvas import render_preview
 from core.file_manager import save_project, load_project
 from PIL import Image
 from typing import Dict, Any, Optional
+import os
+from core.canvas import export_to_png
+from core.filters import apply_filter_to_layer
+from core.filters import rotate_layer
+from core.filters import scale_layer
 
 _current_project: Optional[Project] = None
 
@@ -20,10 +25,22 @@ def add_layer(name: str, image_path: str = None) -> Dict[str, Any]:
     if _current_project is None:
         return {"error": "No active project"}
     
+    img = None
     if image_path:
-        img = Image.open(image_path).convert('RGBA')
-    else:
-        img = None
+        # Проверка 1: существует ли файл
+        if not os.path.exists(image_path):
+            return {"error": f"File not found: {image_path}"}
+        
+        # Проверка 2: правильное ли расширение
+        ext = os.path.splitext(image_path)[1].lower()
+        if ext not in ['.png', '.jpg', '.jpeg']:
+            return {"error": f"Unsupported format: {ext}. Use PNG or JPG"}
+        
+        # Проверка 3: можно ли открыть файл
+        try:
+            img = Image.open(image_path).convert('RGBA')
+        except Exception as e:
+            return {"error": f"Cannot open image: {str(e)}"}
     
     layer = Layer(name, img)
     _current_project.add_layer(layer)
@@ -182,3 +199,191 @@ def get_project_info() -> Dict[str, Any]:
         "version": _current_project.version,
         "layers_count": len(_current_project.layers)
     }
+
+def export_project(filepath: str) -> Dict[str, Any]:
+    """Экспортирует текущий проект в PNG"""
+    global _current_project
+    if _current_project is None:
+        return {"error": "No active project"}
+    
+    if export_to_png(_current_project, filepath):
+        return {"status": "ok", "file": filepath}
+    return {"error": "Export failed"}
+
+def undo() -> Dict[str, Any]:
+    """Отменяет последнее действие"""
+    global _current_project
+    if _current_project is None:
+        return {"error": "No active project"}
+    
+    if _current_project.undo():
+        return {"status": "ok"}
+    return {"error": "Nothing to undo"}
+
+def redo() -> Dict[str, Any]:
+    """Повторяет отменённое действие"""
+    global _current_project
+    if _current_project is None:
+        return {"error": "No active project"}
+    
+    if _current_project.redo():
+        return {"status": "ok"}
+    return {"error": "Nothing to redo"}
+
+def apply_filter_to_layer_api(layer_index: int, filter_type: str, value: int) -> Dict[str, Any]:
+    """
+    Применяет фильтр к слою
+    filter_type: "brightness" или "contrast"
+    value: от -100 до 100
+    """
+    global _current_project
+    if _current_project is None:
+        return {"error": "No active project"}
+    
+    if not (0 <= layer_index < len(_current_project.layers)):
+        return {"error": "Invalid layer index"}
+    
+    layer = _current_project.layers[layer_index]
+    if layer.image is None:
+        return {"error": "Layer has no image"}
+    
+    try:
+        layer.image = apply_filter_to_layer(layer.image, filter_type, value)
+        _current_project._save_to_history()
+        return {"status": "ok", "filter": filter_type, "value": value}
+    except Exception as e:
+        return {"error": f"Failed to apply filter: {str(e)}"}
+    
+def rotate_layer_api(layer_index: int, angle: float) -> Dict[str, Any]:
+    """
+    Поворачивает слой на заданный угол
+    angle: 90, 180, 270 или любое другое число
+    """
+    global _current_project
+    if _current_project is None:
+        return {"error": "No active project"}
+    
+    if not (0 <= layer_index < len(_current_project.layers)):
+        return {"error": "Invalid layer index"}
+    
+    layer = _current_project.layers[layer_index]
+    if layer.image is None:
+        return {"error": "Layer has no image"}
+    
+    try:
+        layer.image = rotate_layer(layer.image, angle)
+        _current_project._save_to_history()
+        return {"status": "ok", "angle": angle}
+    except Exception as e:
+        return {"error": f"Failed to rotate: {str(e)}"}
+
+def scale_layer_api(layer_index: int, scale_x: float, scale_y: float = None) -> Dict[str, Any]:
+    """
+    Масштабирует слой
+    scale_x: 0.5 = уменьшить вдвое, 2.0 = увеличить вдвое
+    scale_y: если не указан, равен scale_x
+    """
+    global _current_project
+    if _current_project is None:
+        return {"error": "No active project"}
+    
+    if not (0 <= layer_index < len(_current_project.layers)):
+        return {"error": "Invalid layer index"}
+    
+    layer = _current_project.layers[layer_index]
+    if layer.image is None:
+        return {"error": "Layer has no image"}
+    
+    try:
+        old_width, old_height = layer.image.size
+        layer.image = scale_layer(layer.image, scale_x, scale_y)
+        new_width, new_height = layer.image.size
+        
+        # Корректируем позицию слоя, чтобы он оставался примерно на том же месте
+        layer.x = int(layer.x * (new_width / old_width))
+        layer.y = int(layer.y * (new_height / old_height))
+        
+        _current_project._save_to_history()
+        return {"status": "ok", "scale_x": scale_x, "scale_y": scale_y or scale_x}
+    except Exception as e:
+        return {"error": f"Failed to scale: {str(e)}"}
+
+def apply_filter_to_layer_api(layer_index: int, filter_type: str, value: int) -> Dict[str, Any]:
+    """
+    Применяет фильтр к слою
+    filter_type: "brightness" или "contrast"
+    value: от -100 до 100
+    """
+    global _current_project
+    if _current_project is None:
+        return {"error": "No active project"}
+    
+    if not (0 <= layer_index < len(_current_project.layers)):
+        return {"error": "Invalid layer index"}
+    
+    layer = _current_project.layers[layer_index]
+    if layer.image is None:
+        return {"error": "Layer has no image"}
+    
+    try:
+        layer.image = apply_filter_to_layer(layer.image, filter_type, value)
+        _current_project._save_to_history()
+        return {"status": "ok", "filter": filter_type, "value": value}
+    except Exception as e:
+        return {"error": f"Failed to apply filter: {str(e)}"}
+
+
+def rotate_layer_api(layer_index: int, angle: float) -> Dict[str, Any]:
+    """
+    Поворачивает слой на заданный угол
+    angle: 90, 180, 270 или любое другое число
+    """
+    global _current_project
+    if _current_project is None:
+        return {"error": "No active project"}
+    
+    if not (0 <= layer_index < len(_current_project.layers)):
+        return {"error": "Invalid layer index"}
+    
+    layer = _current_project.layers[layer_index]
+    if layer.image is None:
+        return {"error": "Layer has no image"}
+    
+    try:
+        layer.image = rotate_layer(layer.image, angle)
+        _current_project._save_to_history()
+        return {"status": "ok", "angle": angle}
+    except Exception as e:
+        return {"error": f"Failed to rotate: {str(e)}"}
+
+
+def scale_layer_api(layer_index: int, scale_x: float, scale_y: float = None) -> Dict[str, Any]:
+    """
+    Масштабирует слой
+    scale_x: 0.5 = уменьшить вдвое, 2.0 = увеличить вдвое
+    scale_y: если не указан, равен scale_x
+    """
+    global _current_project
+    if _current_project is None:
+        return {"error": "No active project"}
+    
+    if not (0 <= layer_index < len(_current_project.layers)):
+        return {"error": "Invalid layer index"}
+    
+    layer = _current_project.layers[layer_index]
+    if layer.image is None:
+        return {"error": "Layer has no image"}
+    
+    try:
+        old_width, old_height = layer.image.size
+        layer.image = scale_layer(layer.image, scale_x, scale_y)
+        new_width, new_height = layer.image.size
+        
+        # Корректируем позицию слоя
+        layer.x = int(layer.x * (new_width / old_width))
+        layer.y = int(layer.y * (new_height / old_height))
+        
+        _current_project._save_to_history()
+        return {"status": "ok", "scale_x": scale_x, "scale_y": scale_y or scale_x}
+    except Exception as e:
+        return {"error": f"Failed to scale: {str(e)}"}

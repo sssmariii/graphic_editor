@@ -1,0 +1,25 @@
+{
+  "width": 800,
+  "height": 600,
+  "version": 1,
+  "layers": [
+    {
+      "name": "\u0422\u0435\u0441\u0442\u043e\u0432\u044b\u0439 \u0441\u043b\u043e\u0439",
+      "visible": true,
+      "opacity": 100,
+      "blend_mode": "normal",
+      "x": 0,
+      "y": 0,
+      "image_file": "layer_0.png"
+    },
+    {
+      "name": "\u0415\u0449\u0451 \u0441\u043b\u043e\u0439",
+      "visible": true,
+      "opacity": 100,
+      "blend_mode": "normal",
+      "x": 0,
+      "y": 0,
+      "image_file": "layer_1.png"
+    }
+  ]
+}

@@ -20,3 +20,9 @@ class Layer:
     def set_blend_mode(self, mode: str):
         if mode in ["normal", "multiply", "screen"]:
             self.blend_mode = mode
+
+BLEND_MODES = {
+    "normal": lambda bg, fg: fg,
+    "multiply": lambda bg, fg: tuple(int(b * f / 255) for b, f in zip(bg[:3], fg[:3])) + (fg[3],),
+    "screen": lambda bg, fg: tuple(255 - int((255 - b) * (255 - f) / 255) for b, f in zip(bg[:3], fg[:3])) + (fg[3],),
+}

@@ -3,6 +3,8 @@ from core.layer import Layer
 from core.canvas import render_preview
 from core.file_manager import save_project, load_project
 from PIL import Image
+import base64
+import io
 from typing import Dict, Any, Optional
 import os
 from core.canvas import export_to_png
@@ -27,16 +29,13 @@ def add_layer(name: str, image_path: str = None) -> Dict[str, Any]:
     
     img = None
     if image_path:
-        # Проверка 1: существует ли файл
         if not os.path.exists(image_path):
             return {"error": f"File not found: {image_path}"}
         
-        # Проверка 2: правильное ли расширение
         ext = os.path.splitext(image_path)[1].lower()
         if ext not in ['.png', '.jpg', '.jpeg']:
             return {"error": f"Unsupported format: {ext}. Use PNG or JPG"}
         
-        # Проверка 3: можно ли открыть файл
         try:
             img = Image.open(image_path).convert('RGBA')
         except Exception as e:
@@ -139,7 +138,7 @@ def move_layer_to_top(layer_index: int) -> Dict[str, Any]:
 
 
 def move_layer_to_bottom(layer_index: int) -> Dict[str, Any]:
-    """Перемещает слой вниз"""
+    global _current_project
     if _current_project is None:
         return {"error": "No active project"}
     
@@ -149,7 +148,6 @@ def move_layer_to_bottom(layer_index: int) -> Dict[str, Any]:
 
 
 def set_layer_position(layer_index: int, x: int, y: int) -> Dict[str, Any]:
-    """Устанавливает позицию слоя"""
     if _current_project is None:
         return {"error": "No active project"}
     
@@ -161,7 +159,6 @@ def set_layer_position(layer_index: int, x: int, y: int) -> Dict[str, Any]:
 
 
 def remove_layer(layer_index: int) -> Dict[str, Any]:
-    """Удаляет слой"""
     if _current_project is None:
         return {"error": "No active project"}
     
@@ -172,7 +169,6 @@ def remove_layer(layer_index: int) -> Dict[str, Any]:
 
 
 def save_current_project(folder_path: str) -> Dict[str, Any]:
-    """Сохраняет текущий проект в папку"""
     global _current_project
     if _current_project is None:
         return {"error": "No active project"}
@@ -182,14 +178,12 @@ def save_current_project(folder_path: str) -> Dict[str, Any]:
 
 
 def load_project_from_folder(folder_path: str) -> Dict[str, Any]:
-    """Загружает проект из папки"""
     global _current_project
     _current_project = load_project(folder_path)
     return {"status": "ok", "project_id": 1}
 
 
 def get_project_info() -> Dict[str, Any]:
-    """Возвращает информацию о текущем проекте"""
     if _current_project is None:
         return {"error": "No active project"}
     
@@ -201,7 +195,6 @@ def get_project_info() -> Dict[str, Any]:
     }
 
 def export_project(filepath: str) -> Dict[str, Any]:
-    """Экспортирует текущий проект в PNG"""
     global _current_project
     if _current_project is None:
         return {"error": "No active project"}
@@ -211,7 +204,6 @@ def export_project(filepath: str) -> Dict[str, Any]:
     return {"error": "Export failed"}
 
 def undo() -> Dict[str, Any]:
-    """Отменяет последнее действие"""
     global _current_project
     if _current_project is None:
         return {"error": "No active project"}
@@ -221,7 +213,6 @@ def undo() -> Dict[str, Any]:
     return {"error": "Nothing to undo"}
 
 def redo() -> Dict[str, Any]:
-    """Повторяет отменённое действие"""
     global _current_project
     if _current_project is None:
         return {"error": "No active project"}
@@ -231,11 +222,7 @@ def redo() -> Dict[str, Any]:
     return {"error": "Nothing to redo"}
 
 def apply_filter_to_layer_api(layer_index: int, filter_type: str, value: int) -> Dict[str, Any]:
-    """
-    Применяет фильтр к слою
-    filter_type: "brightness" или "contrast"
-    value: от -100 до 100
-    """
+    
     global _current_project
     if _current_project is None:
         return {"error": "No active project"}
@@ -255,10 +242,7 @@ def apply_filter_to_layer_api(layer_index: int, filter_type: str, value: int) ->
         return {"error": f"Failed to apply filter: {str(e)}"}
     
 def rotate_layer_api(layer_index: int, angle: float) -> Dict[str, Any]:
-    """
-    Поворачивает слой на заданный угол
-    angle: 90, 180, 270 или любое другое число
-    """
+    
     global _current_project
     if _current_project is None:
         return {"error": "No active project"}
@@ -278,11 +262,6 @@ def rotate_layer_api(layer_index: int, angle: float) -> Dict[str, Any]:
         return {"error": f"Failed to rotate: {str(e)}"}
 
 def scale_layer_api(layer_index: int, scale_x: float, scale_y: float = None) -> Dict[str, Any]:
-    """
-    Масштабирует слой
-    scale_x: 0.5 = уменьшить вдвое, 2.0 = увеличить вдвое
-    scale_y: если не указан, равен scale_x
-    """
     global _current_project
     if _current_project is None:
         return {"error": "No active project"}
@@ -299,7 +278,6 @@ def scale_layer_api(layer_index: int, scale_x: float, scale_y: float = None) -> 
         layer.image = scale_layer(layer.image, scale_x, scale_y)
         new_width, new_height = layer.image.size
         
-        # Корректируем позицию слоя, чтобы он оставался примерно на том же месте
         layer.x = int(layer.x * (new_width / old_width))
         layer.y = int(layer.y * (new_height / old_height))
         
@@ -309,11 +287,7 @@ def scale_layer_api(layer_index: int, scale_x: float, scale_y: float = None) -> 
         return {"error": f"Failed to scale: {str(e)}"}
 
 def apply_filter_to_layer_api(layer_index: int, filter_type: str, value: int) -> Dict[str, Any]:
-    """
-    Применяет фильтр к слою
-    filter_type: "brightness" или "contrast"
-    value: от -100 до 100
-    """
+   
     global _current_project
     if _current_project is None:
         return {"error": "No active project"}
@@ -334,10 +308,7 @@ def apply_filter_to_layer_api(layer_index: int, filter_type: str, value: int) ->
 
 
 def rotate_layer_api(layer_index: int, angle: float) -> Dict[str, Any]:
-    """
-    Поворачивает слой на заданный угол
-    angle: 90, 180, 270 или любое другое число
-    """
+  
     global _current_project
     if _current_project is None:
         return {"error": "No active project"}
@@ -358,11 +329,7 @@ def rotate_layer_api(layer_index: int, angle: float) -> Dict[str, Any]:
 
 
 def scale_layer_api(layer_index: int, scale_x: float, scale_y: float = None) -> Dict[str, Any]:
-    """
-    Масштабирует слой
-    scale_x: 0.5 = уменьшить вдвое, 2.0 = увеличить вдвое
-    scale_y: если не указан, равен scale_x
-    """
+    
     global _current_project
     if _current_project is None:
         return {"error": "No active project"}
@@ -379,7 +346,6 @@ def scale_layer_api(layer_index: int, scale_x: float, scale_y: float = None) -> 
         layer.image = scale_layer(layer.image, scale_x, scale_y)
         new_width, new_height = layer.image.size
         
-        # Корректируем позицию слоя
         layer.x = int(layer.x * (new_width / old_width))
         layer.y = int(layer.y * (new_height / old_height))
         
@@ -387,3 +353,72 @@ def scale_layer_api(layer_index: int, scale_x: float, scale_y: float = None) -> 
         return {"status": "ok", "scale_x": scale_x, "scale_y": scale_y or scale_x}
     except Exception as e:
         return {"error": f"Failed to scale: {str(e)}"}
+
+def export_project_to_cloud() -> Dict[str, Any]:
+    global _current_project
+    if _current_project is None:
+        return {"error": "No active project"}
+    
+    project_data = {
+        "width": _current_project.width,
+        "height": _current_project.height,
+        "version": _current_project.version,
+        "layers": []
+    }
+    
+    for i, layer in enumerate(_current_project.layers):
+        layer_data = {
+            "name": layer.name,
+            "visible": layer.visible,
+            "opacity": layer.opacity,
+            "blend_mode": layer.blend_mode,
+            "x": layer.x,
+            "y": layer.y,
+            "image_base64": None
+        }
+        
+        if layer.image is not None:
+            buffer = io.BytesIO()
+            layer.image.save(buffer, format="PNG")
+            buffer.seek(0)
+            layer_data["image_base64"] = base64.b64encode(buffer.read()).decode("utf-8")
+        
+        project_data["layers"].append(layer_data)
+    
+    return {"status": "ok", "project_data": project_data}
+
+
+def import_project_from_cloud(json_data: Dict[str, Any]) -> Dict[str, Any]:
+    
+    global _current_project
+    
+    try:
+        project_info = json_data.get("project_data", json_data)
+        
+        _current_project = Project(
+            project_info.get("width", 800),
+            project_info.get("height", 600)
+        )
+        _current_project.version = project_info.get("version", 1)
+        
+        for layer_data in project_info.get("layers", []):
+            image = None
+            if layer_data.get("image_base64"):
+                image_bytes = base64.b64decode(layer_data["image_base64"])
+                image_buffer = io.BytesIO(image_bytes)
+                image = Image.open(image_buffer).convert('RGBA')
+            
+            layer = Layer(layer_data["name"], image)
+            layer.visible = layer_data.get("visible", True)
+            layer.opacity = layer_data.get("opacity", 100)
+            layer.blend_mode = layer_data.get("blend_mode", "normal")
+            layer.x = layer_data.get("x", 0)
+            layer.y = layer_data.get("y", 0)
+            
+            _current_project.add_layer(layer)
+        
+        _current_project._save_to_history()
+        return {"status": "ok", "project_id": 1, "layers_count": len(_current_project.layers)}
+    
+    except Exception as e:
+        return {"error": f"Failed to import project: {str(e)}"}

@@ -1,0 +1,34 @@
+{
+  "width": 800,
+  "height": 600,
+  "version": 1,
+  "layers": [
+    {
+      "name": "\u0424\u043e\u043d",
+      "visible": true,
+      "opacity": 100,
+      "blend_mode": "normal",
+      "x": 0,
+      "y": 0,
+      "image_file": "layer_0.png"
+    },
+    {
+      "name": "\u0420\u0438\u0441\u0443\u043d\u043e\u043a",
+      "visible": true,
+      "opacity": 75,
+      "blend_mode": "multiply",
+      "x": 0,
+      "y": 0,
+      "image_file": "layer_1.png"
+    },
+    {
+      "name": "\u0422\u0435\u043a\u0441\u0442",
+      "visible": true,
+      "opacity": 100,
+      "blend_mode": "normal",
+      "x": 0,
+      "y": 0,
+      "image_file": "layer_2.png"
+    }
+  ]
+}

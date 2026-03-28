@@ -1,8 +1,10 @@
 from api.editor_api import (
     create_project,
     add_layer,
+    export_project_to_cloud,
     get_layers,
     get_preview,
+    import_project_from_cloud,
     set_layer_visibility,
     set_layer_opacity,
     set_layer_blend_mode,
@@ -21,10 +23,10 @@ from api.editor_api import (
     apply_filter_to_layer_api,
     rotate_layer_api,
     scale_layer_api
+    
 )
 
 def print_layers():
-    """Выводит список слоёв"""
     result = get_layers()
     if "error" in result:
         print(f"  Ошибка: {result['error']}")
@@ -45,11 +47,9 @@ def main():
     print("ТЕСТИРОВАНИЕ БЭКЕНДА")
     print("=" * 50)
     
-    # 1. Создаём проект
     print("\n1. Создаём проект 800x600")
     create_project(800, 600)
     
-    # 2. Добавляем слои
     print("\n2. Добавляем слои")
     add_layer("Фон")
     add_layer("Рисунок")
@@ -57,22 +57,18 @@ def main():
     add_layer("Логотип")
     print_layers()
     
-    # 3. Меняем прозрачность
     print("\n3. Меняем прозрачность слоя 1 на 50%")
     set_layer_opacity(1, 50)
     print_layers()
     
-    # 4. Меняем режим наложения
     print("\n4. Меняем режим наложения слоя 1 на multiply")
     set_layer_blend_mode(1, "multiply")
     print_layers()
     
-    # 5. Прячем слой
     print("\n5. Прячем слой 2")
     set_layer_visibility(2, False)
     print_layers()
     
-    # 6. Перемещаем слои
     print("\n6. Перемещаем слой 3 выше")
     move_layer_up(3)
     print_layers()
@@ -81,27 +77,22 @@ def main():
     move_layer_down(0)
     print_layers()
     
-    # 8. Меняем позицию слоя
     print("\n8. Меняем позицию слоя 0 на x=100, y=50")
     set_layer_position(0, 100, 50)
     print_layers()
     
-    # 9. Сохраняем проект
     print("\n9. Сохраняем проект в папку test_project")
     save_current_project("test_project")
     
-    # 10. Экспортируем в PNG
     print("\n10. Экспортируем в PNG")
     export_project("export.png")
     
-    # 11. Информация о проекте
     print("\n11. Информация о проекте")
     info = get_project_info()
     print(f"  Размер: {info['width']} x {info['height']}")
     print(f"  Слоёв: {info['layers_count']}")
     print(f"  Версия: {info['version']}")
     
-    # 12. Тест Undo/Redo
     print("\n12. Тест Undo/Redo")
     print("  До Undo:")
     print_layers()
@@ -114,26 +105,20 @@ def main():
     print("  После Redo (повтор):")
     print_layers()
     
-    # 13. Загружаем проект обратно
     print("\n13. Загружаем проект из папки test_project")
     load_project_from_folder("test_project")
     print_layers()
     
-    # 14. Удаляем слой
     print("\n14. Удаляем слой 0")
     remove_layer(0)
     print_layers()
     
-    # 15. Получаем превью
     print("\n15. Информация о превью")
     preview = get_preview()
     print(f"  Размер превью: {preview['width']} x {preview['height']}")
 
-    # 16. Тест фильтров
     print("\n16. Тест фильтров")
     
-    # Создаём тестовый слой с изображением (если есть файл)
-    # Или используем существующий слой
     add_layer("Для фильтров", None)
     
     print("  Применяем яркость +50 к слою 4")
@@ -142,15 +127,38 @@ def main():
     print("  Применяем контраст +30 к слою 4")
     apply_filter_to_layer_api(4, "contrast", 30)
     
-    # 17. Тест поворота
     print("\n17. Тест поворота")
     print("  Поворачиваем слой 4 на 90°")
     rotate_layer_api(4, 90)
     
-    # 18. Тест масштабирования
     print("\n18. Тест масштабирования")
     print("  Увеличиваем слой 4 в 1.5 раза")
     scale_layer_api(4, 1.5)
+
+     # 19. Тест облачных функций
+    print("\n19. Тест облачных функций")
+    
+    # Экспортируем в JSON с base64
+    result = export_project_to_cloud()
+    if "error" in result:
+        print(f"  Ошибка: {result['error']}")
+    else:
+        print("  ✅ Проект экспортирован в JSON с base64")
+        
+        # Сохраняем JSON в файл (для демонстрации)
+        import json
+        with open("cloud_export.json", "w", encoding="utf-8") as f:
+            json.dump(result["project_data"], f, ensure_ascii=False, indent=2)
+        print("  ✅ JSON сохранён в cloud_export.json")
+        
+        # Импортируем обратно (создаём новый проект из JSON)
+        print("  Импортируем проект обратно...")
+        import_result = import_project_from_cloud(result)
+        print(f"  Результат импорта: {import_result}")
+        
+        # Проверяем слои после импорта
+        layers = get_layers()
+        print(f"  Слоёв после импорта: {len(layers['layers'])}")
     
     print("\n✅ Фильтры, поворот и масштабирование работают!")
     

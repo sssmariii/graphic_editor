@@ -70,3 +70,20 @@ class Project:
             self._save_to_history()
             return True
         return False
+    def move_layer_to_top(self, index: int):
+        """Перемещает слой наверх"""
+        if 0 <= index < len(self.layers):
+            layer = self.layers.pop(index)
+            self.layers.append(layer)
+            self._save_to_history()
+            return True
+        return False
+
+    def move_layer_to_bottom(self, index: int):
+        """Перемещает слой вниз"""
+        if 0 <= index < len(self.layers):
+            layer = self.layers.pop(index)
+            self.layers.insert(0, layer)
+            self._save_to_history()
+            return True
+        return False

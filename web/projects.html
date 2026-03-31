@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Graphitium | Мои проекты</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #000000;
+            color: #ededee;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        .app-container {
+            display: flex;
+            height: 100vh;
+            background: #000000;
+        }
+
+        /* Стеклянная левая панель */
+        .sidebar-left {
+            width: 72px;
+            background: rgba(18, 18, 24, 0.65);
+            backdrop-filter: blur(14px);
+            border-right: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 24px 0;
+            gap: 24px;
+            z-index: 10;
+        }
+
+        .sidebar-left .icon {
+            width: 44px;
+            height: 44px;
+            background: rgba(25, 25, 35, 0.7);
+            backdrop-filter: blur(4px);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            cursor: pointer;
+            transition: 0.2s;
+            color: #cdd9ff;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .sidebar-left .icon:hover {
+            background: rgba(80, 110, 200, 0.5);
+            transform: scale(1.06);
+            border-color: rgba(133, 173, 255, 0.5);
+            color: white;
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Стеклянная верхняя панель */
+        .top-bar {
+            background: rgba(12, 12, 18, 0.7);
+            backdrop-filter: blur(16px);
+            padding: 12px 28px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .menu {
+            display: flex;
+            gap: 28px;
+        }
+
+        .menu-item {
+            color: #e0e0e8;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: 0.2s;
+        }
+
+        .menu-item:hover {
+            color: #85adff;
+        }
+
+        .user-area {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+        }
+
+        .user-email {
+            font-size: 12px;
+            color: #b8c7ff;
+            background: rgba(30, 30, 45, 0.6);
+            padding: 5px 12px;
+            border-radius: 40px;
+        }
+
+        .logout-btn, .login-btn {
+            background: rgba(45, 45, 65, 0.7);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 6px 14px;
+            border-radius: 28px;
+            color: #f0f0f0;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: 0.2s;
+        }
+
+        .logout-btn:hover, .login-btn:hover {
+            background: rgba(100, 100, 140, 0.8);
+        }
+
+        .page-header {
+            padding: 28px 32px 8px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .page-header h1 {
+            font-size: 28px;
+            font-weight: 600;
+            background: linear-gradient(135deg, #ffffff, #b9ceff);
+            background-clip: text;
+            -webkit-background-clip: text;
+            color: transparent;
+        }
+
+        .new-project-btn {
+            background: rgba(133, 173, 255, 0.2);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(133, 173, 255, 0.5);
+            padding: 10px 22px;
+            border-radius: 40px;
+            color: #eef3ff;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            transition: 0.25s;
+        }
+
+        .new-project-btn:hover {
+            background: rgba(133, 173, 255, 0.4);
+            transform: translateY(-2px);
+        }
+
+        .projects-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px 32px 32px 32px;
+        }
+
+        .projects-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        .projects-container::-webkit-scrollbar-track {
+            background: #18181e;
+            border-radius: 8px;
+        }
+        .projects-container::-webkit-scrollbar-thumb {
+            background: #3a3a5a;
+            border-radius: 8px;
+        }
+
+        .project-card {
+            background: rgba(20, 20, 28, 0.55);
+            backdrop-filter: blur(14px);
+            border-radius: 24px;
+            padding: 18px 24px;
+            margin-bottom: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.25s ease;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .project-card:hover {
+            background: rgba(28, 28, 38, 0.7);
+            border-color: rgba(133, 173, 255, 0.35);
+            transform: translateX(5px);
+        }
+
+        .project-info {
+            flex: 1;
+        }
+
+        .project-name {
+            font-size: 17px;
+            font-weight: 600;
+            color: #ffffff;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .project-badge {
+            font-size: 10px;
+            background: rgba(80, 100, 160, 0.5);
+            padding: 3px 12px;
+            border-radius: 30px;
+            color: #c8ddff;
+        }
+
+        .project-meta {
+            font-size: 12px;
+            color: #acb4d4;
+            display: flex;
+            gap: 24px;
+        }
+
+        .project-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .project-actions button {
+            background: rgba(35, 35, 50, 0.8);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 8px 18px;
+            border-radius: 32px;
+            color: #e6e9ff;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: 0.2s;
+        }
+
+        .project-actions button:hover {
+            background: rgba(65, 75, 110, 0.8);
+        }
+
+        .open-btn {
+            background: rgba(133, 173, 255, 0.3) !important;
+            border-color: rgba(133, 173, 255, 0.5) !important;
+            font-weight: 600;
+        }
+
+        .delete-btn:hover {
+            background: rgba(220, 80, 80, 0.7) !important;
+        }
+
+        .status-bar {
+            background: rgba(8, 8, 12, 0.7);
+            backdrop-filter: blur(16px);
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 8px 28px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: #a0a8cc;
+        }
+
+        .status-left, .status-right {
+            display: flex;
+            gap: 24px;
+        }
+
+        .synced {
+            color: #6ef0a0;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 70px 20px;
+            background: rgba(15, 15, 22, 0.45);
+            backdrop-filter: blur(12px);
+            border-radius: 48px;
+            margin-top: 30px;
+        }
+
+        .empty-state p {
+            margin-bottom: 24px;
+            font-size: 16px;
+            color: #cbd5ff;
+        }
+
+        .loader {
+            text-align: center;
+            padding: 60px;
+            color: #85adff;
+        }
+
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: rgba(20, 20, 28, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 32px;
+            padding: 32px;
+            width: 320px;
+            border: 1px solid rgba(133,173,255,0.3);
+        }
+
+        .modal-content h3 {
+            margin-bottom: 20px;
+            color: white;
+        }
+
+        .modal-content input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 16px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 12px;
+            color: white;
+            font-size: 14px;
+        }
+
+        .modal-content button {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 24px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .modal-btn-primary {
+            background: #85adff;
+            border: none;
+            color: #000;
+        }
+
+        .modal-btn-secondary {
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="sidebar-left">
+            <div class="icon" title="Новый проект" onclick="createNewProject()">📄</div>
+            <div class="icon" title="Обновить" onclick="loadProjects()">🔄</div>
+            <div class="icon" title="Настройки">⚙️</div>
+            <div class="icon" title="Помощь">❓</div>
+        </div>
+
+        <div class="main-content">
+            <div class="top-bar">
+                <div class="menu">
+                    <div class="menu-item">File</div>
+                    <div class="menu-item">Edit</div>
+                    <div class="menu-item">View</div>
+                    <div class="menu-item">Layer</div>
+                    <div class="menu-item">Help</div>
+                </div>
+                <div class="user-area" id="user-area">
+                    <span class="user-email" id="user-email"></span>
+                    <button class="logout-btn" id="logout-btn" onclick="logout()" style="display: none;">Выйти</button>
+                    <button class="login-btn" id="login-btn" onclick="showLoginModal()" style="display: none;">Войти</button>
+                </div>
+            </div>
+
+            <div class="page-header">
+                <h1>📁 Мои проекты</h1>
+                <button class="new-project-btn" onclick="createNewProject()">✨ Новый проект</button>
+            </div>
+
+            <div class="projects-container" id="projects-container">
+                <div class="loader">🔄 Загрузка проектов...</div>
+            </div>
+
+            <div class="status-bar">
+                <div class="status-left">
+                    <span>📐 X: 124px | Y: 76px</span>
+                    <span>🔍 Zoom: 100%</span>
+                    <span>🖌️ Tool: Vector</span>
+                </div>
+                <div class="status-right">
+                    <span class="synced">☁️ Cloud Sync Active</span>
+                    <span>📄 Graphitium Pro</span>
+                    <span>⌨️ Shortcuts</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно входа/регистрации -->
+    <div id="authModal" class="modal hidden">
+        <div class="modal-content">
+            <h3 id="modalTitle">Вход</h3>
+            <input type="email" id="loginEmail" placeholder="Email" value="sync@test.com">
+            <input type="password" id="loginPassword" placeholder="Пароль" value="123456">
+            <button class="modal-btn-primary" id="modalActionBtn">Войти</button>
+            <button class="modal-btn-secondary" id="modalSwitchBtn">Нет аккаунта? Зарегистрироваться</button>
+            <button class="modal-btn-secondary" onclick="closeModal()">Отмена</button>
+        </div>
+    </div>
+
+    <script>
+        // Конфигурация
+        const API_BASE = 'http://localhost:5000';
+        let currentToken = localStorage.getItem('graphitium_token') || '';
+        let isLoginMode = true;
+
+        // Инициализация
+        async function init() {
+            if (currentToken) {
+                showUserArea(true);
+                await loadProjects();
+            } else {
+                showUserArea(false);
+                showLoginPrompt();
+            }
+        }
+
+        function showUserArea(loggedIn) {
+            const userEmailSpan = document.getElementById('user-email');
+            const logoutBtn = document.getElementById('logout-btn');
+            const loginBtn = document.getElementById('login-btn');
+            
+            if (loggedIn && currentToken) {
+                userEmailSpan.textContent = 'Пользователь';
+                logoutBtn.style.display = 'block';
+                loginBtn.style.display = 'none';
+            } else {
+                userEmailSpan.textContent = '';
+                logoutBtn.style.display = 'none';
+                loginBtn.style.display = 'block';
+            }
+        }
+
+        function showLoginPrompt() {
+            const container = document.getElementById('projects-container');
+            container.innerHTML = `
+                <div class="empty-state">
+                    <p>🔐 Войдите в аккаунт, чтобы увидеть свои проекты</p>
+                    <button class="new-project-btn" onclick="showLoginModal()">Войти / Регистрация</button>
+                </div>
+            `;
+        }
+
+        // Загрузка проектов через API
+        async function loadProjects() {
+            if (!currentToken) {
+                showLoginPrompt();
+                return;
+            }
+            
+            const container = document.getElementById('projects-container');
+            container.innerHTML = '<div class="loader">🔄 Загрузка проектов...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/projects`, {
+                    headers: { 'Authorization': `Bearer ${currentToken}` }
+                });
+                const data = await response.json();
+                
+                if (data.ok && data.projects) {
+                    if (data.projects.length === 0) {
+                        container.innerHTML = `
+                            <div class="empty-state">
+                                <p>📭 У вас пока нет проектов</p>
+                                <button class="new-project-btn" onclick="createNewProject()">Создать первый проект</button>
+                            </div>
+                        `;
+                    } else {
+                        displayProjects(data.projects);
+                    }
+                } else {
+                    throw new Error(data.error || 'Ошибка загрузки');
+                }
+            } catch (error) {
+                console.error('Ошибка:', error);
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <p>❌ Не удалось загрузить проекты</p>
+                        <button class="new-project-btn" onclick="loadProjects()">Повторить</button>
+                    </div>
+                `;
+            }
+        }
+
+        function displayProjects(projects) {
+            const container = document.getElementById('projects-container');
+            
+            container.innerHTML = projects.map(project => `
+                <div class="project-card">
+                    <div class="project-info">
+                        <div class="project-name">
+                            ${escapeHtml(project.name)}
+                            <span class="project-badge">📁 Проект</span>
+                        </div>
+                        <div class="project-meta">
+                            <span>🆔 ${project.id}</span>
+                            <span>🕒 ${project.saved_at || 'недавно'}</span>
+                        </div>
+                    </div>
+                    <div class="project-actions">
+                        <button class="open-btn" onclick="openProject('${project.id}')">📂 Открыть</button>
+                        <button class="delete-btn" onclick="deleteProject('${project.id}')">🗑 Удалить</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Создать проект
+        function createNewProject() {
+            if (!currentToken) {
+                showLoginModal();
+                return;
+            }
+            const name = prompt("Название нового проекта:", "Мой проект");
+            if (name && name.trim()) {
+                alert(`✨ Проект "${name}" будет создан в редакторе Graphitium`);
+                // Здесь можно вызвать API для создания проекта
+            }
+        }
+
+        // Открыть проект
+        function openProject(projectId) {
+            alert(`🚀 Открытие проекта ${projectId} в редакторе Graphitium`);
+            // Здесь будет вызов открытия в основном приложении
+        }
+
+        // Удалить проект
+        async function deleteProject(projectId) {
+            if (!confirm('Удалить этот проект? Действие нельзя отменить.')) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/projects/${projectId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${currentToken}` }
+                });
+                const data = await response.json();
+                
+                if (data.ok) {
+                    await loadProjects();
+                } else {
+                    alert('Ошибка удаления: ' + data.error);
+                }
+            } catch (error) {
+                alert('Ошибка соединения с сервером');
+            }
+        }
+
+        // Выход
+        function logout() {
+            localStorage.removeItem('graphitium_token');
+            currentToken = '';
+            showUserArea(false);
+            showLoginPrompt();
+        }
+
+        // Модальное окно входа
+        function showLoginModal() {
+            isLoginMode = true;
+            document.getElementById('modalTitle').textContent = 'Вход';
+            document.getElementById('modalActionBtn').textContent = 'Войти';
+            document.getElementById('modalSwitchBtn').textContent = 'Нет аккаунта? Зарегистрироваться';
+            document.getElementById('authModal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('authModal').classList.add('hidden');
+        }
+
+        // Логин через API
+        async function handleAuth() {
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            const url = isLoginMode ? `${API_BASE}/api/login` : `${API_BASE}/api/register`;
+            
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                const data = await response.json();
+                
+                if (data.ok) {
+                    currentToken = data.token;
+                    localStorage.setItem('graphitium_token', currentToken);
+                    closeModal();
+                    showUserArea(true);
+                    await loadProjects();
+                } else {
+                    alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
+                }
+            } catch (error) {
+                alert('Ошибка соединения с сервером');
+            }
+        }
+
+        function switchMode() {
+            isLoginMode = !isLoginMode;
+            document.getElementById('modalTitle').textContent = isLoginMode ? 'Вход' : 'Регистрация';
+            document.getElementById('modalActionBtn').textContent = isLoginMode ? 'Войти' : 'Зарегистрироваться';
+            document.getElementById('modalSwitchBtn').textContent = isLoginMode ? 'Нет аккаунта? Зарегистрироваться' : 'Уже есть аккаунт? Войти';
+        }
+
+        document.getElementById('modalActionBtn').onclick = handleAuth;
+        document.getElementById('modalSwitchBtn').onclick = switchMode;
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        window.loadProjects = loadProjects;
+        init();
+    </script>
+</body>
+</html>

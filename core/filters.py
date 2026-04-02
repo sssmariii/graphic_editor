@@ -2,29 +2,18 @@ from PIL import Image, ImageEnhance
 
 
 def adjust_brightness(image: Image.Image, factor: float) -> Image.Image:
-    """
-    Изменяет яркость изображения
-    factor: 0.0 (чёрное) -> 1.0 (оригинал) -> 2.0 (ярче)
-    """
+    
     enhancer = ImageEnhance.Brightness(image)
     return enhancer.enhance(factor)
 
 
 def adjust_contrast(image: Image.Image, factor: float) -> Image.Image:
-    """
-    Изменяет контраст изображения
-    factor: 0.0 (серое) -> 1.0 (оригинал) -> 2.0 (больше контраста)
-    """
+    
     enhancer = ImageEnhance.Contrast(image)
     return enhancer.enhance(factor)
 
 
 def apply_filter_to_layer(image: Image.Image, filter_type: str, value: float) -> Image.Image:
-    """
-    Применяет фильтр к изображению слоя
-    filter_type: "brightness" или "contrast"
-    value: от -100 до 100 (преобразуется в factor)
-    """
     
     factor = 1.0 + (value / 100.0)
     
@@ -36,10 +25,7 @@ def apply_filter_to_layer(image: Image.Image, filter_type: str, value: float) ->
     return image
 
 def rotate_layer(image: Image.Image, angle: float) -> Image.Image:
-    """
-    Поворачивает изображение на заданный угол
-    angle: 90, 180, 270 или произвольный угол
-    """
+    
     # Для углов кратных 90 используем transpose (быстрее)
     if angle == 90:
         return image.transpose(Image.ROTATE_90)
@@ -52,19 +38,42 @@ def rotate_layer(image: Image.Image, angle: float) -> Image.Image:
         return image.rotate(angle, expand=True, fillcolor=(0, 0, 0, 0))
 
 def scale_layer(image: Image.Image, scale_x: float, scale_y: float = None) -> Image.Image:
-    """
-    Масштабирует изображение
-    scale_x: коэффициент по ширине (0.5 = половина, 2.0 = в два раза)
-    scale_y: коэффициент по высоте (если None, то равен scale_x)
-    """
+    
     if scale_y is None:
         scale_y = scale_x
     
     new_width = int(image.width * scale_x)
     new_height = int(image.height * scale_y)
     
-    # Не даём стать слишком маленьким или большим
     new_width = max(1, min(new_width, 5000))
     new_height = max(1, min(new_height, 5000))
     
     return image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+
+def crop_layer(image: Image.Image, x: int, y: int, width: int, height: int) -> Image.Image:
+    
+    x = max(0, min(x, image.width - 1))
+    y = max(0, min(y, image.height - 1))
+    width = min(width, image.width - x)
+    height = min(height, image.height - y)
+    
+    if width <= 0 or height <= 0:
+        return image
+    
+    return image.crop((x, y, x + width, y + height))
+
+def remove_background(image: Image.Image, threshold: int = 128) -> Image.Image:
+   
+    if image.mode != 'RGBA':
+        image = image.convert('RGBA')
+    
+    pixels = image.load()
+    width, height = image.size
+    
+    for y in range(height):
+        for x in range(width):
+            r, g, b, a = pixels[x, y]
+            if r > threshold and g > threshold and b > threshold:
+                pixels[x, y] = (r, g, b, 0)
+    
+    return image

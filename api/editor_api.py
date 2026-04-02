@@ -11,6 +11,9 @@ from core.canvas import export_to_png
 from core.filters import apply_filter_to_layer
 from core.filters import rotate_layer
 from core.filters import scale_layer
+from core.filters import crop_layer
+from core.filters import remove_background
+from core.signals import progress_tracker
 
 _current_project: Optional[Project] = None
 
@@ -422,3 +425,115 @@ def import_project_from_cloud(json_data: Dict[str, Any]) -> Dict[str, Any]:
     
     except Exception as e:
         return {"error": f"Failed to import project: {str(e)}"}
+
+def crop_layer_api(layer_index: int, x: int, y: int, width: int, height: int) -> Dict[str, Any]:
+    
+    global _current_project
+    if _current_project is None:
+        return {"error": "No active project"}
+    
+    if not (0 <= layer_index < len(_current_project.layers)):
+        return {"error": "Invalid layer index"}
+    
+    layer = _current_project.layers[layer_index]
+    if layer.image is None:
+        return {"error": "Layer has no image"}
+    
+    try:
+        old_width, old_height = layer.image.size
+        layer.image = crop_layer(layer.image, x, y, width, height)
+        
+        layer.x = layer.x + x
+        layer.y = layer.y + y
+        
+        _current_project._save_to_history()
+        return {"status": "ok", "new_width": layer.image.width, "new_height": layer.image.height}
+    except Exception as e:
+        return {"error": f"Failed to crop: {str(e)}"}
+    
+def resize_canvas_api(new_width: int, new_height: int, anchor: str = "center") -> Dict[str, Any]:
+    
+    global _current_project
+    if _current_project is None:
+        return {"error": "No active project"}
+    
+    try:
+        _current_project.resize_canvas(new_width, new_height, anchor)
+        return {"status": "ok", "width": new_width, "height": new_height}
+    except Exception as e:
+        return {"error": f"Failed to resize canvas: {str(e)}"}
+
+def import_psd(filepath: str) -> Dict[str, Any]:
+    global _current_project
+    
+    try:
+        from psd_tools import PSDImage
+        
+        psd = PSDImage.open(filepath)
+        
+        _current_project = Project(psd.width, psd.height)
+        
+        for i, layer in enumerate(psd.layers):
+            if layer.has_thumbnail():
+                img = layer.thumbnail()
+            else:
+                img = layer.composite()
+            
+            if hasattr(img, 'convert'):
+                pil_img = img.convert('RGBA')
+            else:
+                pil_img = Image.fromarray(img).convert('RGBA')
+            
+            new_layer = Layer(layer.name or f"Слой {i+1}", pil_img)
+            new_layer.x = layer.offset[0]
+            new_layer.y = layer.offset[1]
+            new_layer.opacity = int(layer.opacity * 100) if hasattr(layer, 'opacity') else 100
+            new_layer.visible = layer.visible if hasattr(layer, 'visible') else True
+            
+            _current_project.add_layer(new_layer)
+        
+        _current_project._save_to_history()
+        return {"status": "ok", "layers": len(_current_project.layers), "width": psd.width, "height": psd.height}
+    
+    except ImportError:
+        return {"error": "psd-tools not installed. Run: pip install psd-tools"}
+    except Exception as e:
+        return {"error": f"Failed to import PSD: {str(e)}"}
+
+from core.canvas import export_to_pdf
+
+def export_to_pdf_api(filepath: str) -> Dict[str, Any]:
+    global _current_project
+    if _current_project is None:
+        return {"error": "No active project"}
+    
+    if export_to_pdf(_current_project, filepath):
+        return {"status": "ok", "file": filepath}
+    return {"error": "PDF export failed"}
+
+def remove_background_api(layer_index: int, threshold: int = 128) -> Dict[str, Any]:
+    global _current_project
+    if _current_project is None:
+        return {"error": "No active project"}
+    
+    if not (0 <= layer_index < len(_current_project.layers)):
+        return {"error": "Invalid layer index"}
+    
+    layer = _current_project.layers[layer_index]
+    if layer.image is None:
+        return {"error": "Layer has no image"}
+    
+    try:
+        layer.image = remove_background(layer.image, threshold)
+        _current_project._save_to_history()
+        return {"status": "ok"}
+    except Exception as e:
+        return {"error": f"Failed to remove background: {str(e)}"}
+    
+def register_progress_callback(callback) -> Dict[str, Any]:
+    progress_tracker.register_callback(callback)
+    return {"status": "ok"}
+
+
+def get_progress_info() -> Dict[str, Any]:
+    return {"status": "ok", "message": "Progress tracking available"}

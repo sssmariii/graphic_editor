@@ -25,7 +25,6 @@
             background: #000000;
         }
 
-        /* Стеклянная левая панель */
         .sidebar-left {
             width: 72px;
             background: rgba(18, 18, 24, 0.65);
@@ -69,7 +68,6 @@
             overflow: hidden;
         }
 
-        /* Стеклянная верхняя панель */
         .top-bar {
             background: rgba(12, 12, 18, 0.7);
             backdrop-filter: blur(16px);
@@ -431,12 +429,10 @@
     </div>
 
     <script>
-        // Конфигурация
         const API_BASE = 'http://localhost:5000';
         let currentToken = localStorage.getItem('graphitium_token') || '';
         let isLoginMode = true;
 
-        // Инициализация
         async function init() {
             if (currentToken) {
                 showUserArea(true);
@@ -453,7 +449,7 @@
             const loginBtn = document.getElementById('login-btn');
             
             if (loggedIn && currentToken) {
-                userEmailSpan.textContent = 'Пользователь';
+                userEmailSpan.textContent = localStorage.getItem('user_email') || 'Пользователь';
                 logoutBtn.style.display = 'block';
                 loginBtn.style.display = 'none';
             } else {
@@ -473,7 +469,6 @@
             `;
         }
 
-        // Загрузка проектов через API
         async function loadProjects() {
             if (!currentToken) {
                 showLoginPrompt();
@@ -537,7 +532,6 @@
             `).join('');
         }
 
-        // Создать проект
         function createNewProject() {
             if (!currentToken) {
                 showLoginModal();
@@ -546,17 +540,13 @@
             const name = prompt("Название нового проекта:", "Мой проект");
             if (name && name.trim()) {
                 alert(`✨ Проект "${name}" будет создан в редакторе Graphitium`);
-                // Здесь можно вызвать API для создания проекта
             }
         }
 
-        // Открыть проект
         function openProject(projectId) {
             alert(`🚀 Открытие проекта ${projectId} в редакторе Graphitium`);
-            // Здесь будет вызов открытия в основном приложении
         }
 
-        // Удалить проект
         async function deleteProject(projectId) {
             if (!confirm('Удалить этот проект? Действие нельзя отменить.')) return;
             
@@ -577,15 +567,14 @@
             }
         }
 
-        // Выход
         function logout() {
             localStorage.removeItem('graphitium_token');
+            localStorage.removeItem('user_email');
             currentToken = '';
             showUserArea(false);
             showLoginPrompt();
         }
 
-        // Модальное окно входа
         function showLoginModal() {
             isLoginMode = true;
             document.getElementById('modalTitle').textContent = 'Вход';
@@ -598,7 +587,6 @@
             document.getElementById('authModal').classList.add('hidden');
         }
 
-        // Логин через API
         async function handleAuth() {
             const email = document.getElementById('loginEmail').value;
             const password = document.getElementById('loginPassword').value;
@@ -615,6 +603,7 @@
                 if (data.ok) {
                     currentToken = data.token;
                     localStorage.setItem('graphitium_token', currentToken);
+                    localStorage.setItem('user_email', email);
                     closeModal();
                     showUserArea(true);
                     await loadProjects();

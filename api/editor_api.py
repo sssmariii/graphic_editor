@@ -14,6 +14,8 @@ from core.filters import scale_layer
 from core.filters import crop_layer
 from core.filters import remove_background
 from core.signals import progress_tracker
+from core.canvas import render_preview
+from PIL import ImageDraw
 
 _current_project: Optional[Project] = None
 
@@ -50,7 +52,6 @@ def add_layer(name: str, image_path: str = None) -> Dict[str, Any]:
 
 
 def get_layers() -> Dict[str, Any]:
-    """Возвращает список всех слоёв"""
     if _current_project is None:
         return {"layers": []}
     
@@ -60,6 +61,7 @@ def get_layers() -> Dict[str, Any]:
             "index": i,
             "name": layer.name,
             "visible": layer.visible,
+            "locked": layer.locked,
             "opacity": layer.opacity,
             "blend_mode": layer.blend_mode,
             "x": layer.x,
@@ -537,3 +539,85 @@ def register_progress_callback(callback) -> Dict[str, Any]:
 
 def get_progress_info() -> Dict[str, Any]:
     return {"status": "ok", "message": "Progress tracking available"}
+
+def get_combined_image() -> Dict[str, Any]:
+    global _current_project
+    if _current_project is None:
+        return {"error": "No project"}
+    
+    img = render_preview(_current_project)
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG")
+    buffer.seek(0)
+    
+    image_base64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+    
+    return {"status": "ok", "image_base64": image_base64, "width": img.width, "height": img.height}
+
+def set_layer_locked(layer_index: int, locked: bool) -> Dict[str, Any]:
+    global _current_project
+    if _current_project is None:
+        return {"error": "No active project"}
+    
+    if 0 <= layer_index < len(_current_project.layers):
+        _current_project.layers[layer_index].locked = locked
+        _current_project._save_to_history()
+        return {"status": "ok", "locked": locked}
+    return {"error": "Invalid layer index"}
+
+def draw_on_layer(layer_index: int, x: int, y: int, color: str, size: int = 5) -> Dict[str, Any]:
+    global _current_project
+    if _current_project is None:
+        return {"error": "No active project"}
+    
+    if not (0 <= layer_index < len(_current_project.layers)):
+        return {"error": "Invalid layer index"}
+    
+    layer = _current_project.layers[layer_index]
+    
+    if layer.locked:
+        return {"error": "Layer is locked"}
+    
+    if layer.image is None:
+        layer.image = Image.new('RGBA', (_current_project.width, _current_project.height), (0, 0, 0, 0))
+    
+    try:
+        draw = ImageDraw.Draw(layer.image)
+        
+        if isinstance(color, str):
+            draw.ellipse([x - size, y - size, x + size, y + size], fill=color, outline=color)
+        else:
+            draw.ellipse([x - size, y - size, x + size, y + size], fill=color, outline=color)
+        
+        _current_project._save_to_history()
+        return {"status": "ok", "x": x, "y": y, "color": color, "size": size}
+    
+    except Exception as e:
+        return {"error": f"Failed to draw: {str(e)}"}
+
+
+def draw_line_on_layer(layer_index: int, x1: int, y1: int, x2: int, y2: int, color: str, size: int = 5) -> Dict[str, Any]:
+    global _current_project
+    if _current_project is None:
+        return {"error": "No active project"}
+    
+    if not (0 <= layer_index < len(_current_project.layers)):
+        return {"error": "Invalid layer index"}
+    
+    layer = _current_project.layers[layer_index]
+    
+    if layer.locked:
+        return {"error": "Layer is locked"}
+    
+    if layer.image is None:
+        layer.image = Image.new('RGBA', (_current_project.width, _current_project.height), (0, 0, 0, 0))
+    
+    try:
+        draw = ImageDraw.Draw(layer.image)
+        draw.line([x1, y1, x2, y2], fill=color, width=size)
+        
+        _current_project._save_to_history()
+        return {"status": "ok"}
+    
+    except Exception as e:
+        return {"error": f"Failed to draw line: {str(e)}"}

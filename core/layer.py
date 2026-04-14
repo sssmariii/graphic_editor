@@ -10,6 +10,7 @@ class Layer:
         self.blend_mode = "normal"
         self.x = 0
         self.y = 0
+        self.locked = False
 
     def set_visibility(self, visible: bool):
         self.visible = visible

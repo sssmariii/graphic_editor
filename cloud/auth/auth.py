@@ -84,3 +84,24 @@ def get_user(token: str) -> dict:
         user = json.load(f)
     
     return {"ok": True, "user": {"id": user["id"], "email": user["email"]}}
+
+def google_auth(email: str, name: str = None) -> dict:
+    """
+    Аутентификация через Google (создаёт или входит в существующий аккаунт).
+    
+    Args:
+        email: Email от Google
+        name: Имя пользователя (опционально)
+    
+    Returns:
+        {"ok": True, "user_id": "...", "token": "..."}
+    """
+    password = "google_oauth_" + email
+    
+    # Пробуем войти
+    result = login(email, password)
+    if not result.get("ok"):
+        # Если нет аккаунта — регистрируем
+        result = register(email, password)
+    
+    return result

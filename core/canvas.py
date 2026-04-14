@@ -15,11 +15,59 @@ def render_preview(project: Project) -> Image.Image:
             alpha = alpha.point(lambda p: p * layer.opacity // 100)
             img.putalpha(alpha)
         
-        result.paste(img, (layer.x, layer.y), img)
+        blend_mode = layer.blend_mode
+        box = (layer.x, layer.y, layer.x + img.width, layer.y + img.height)
+        
+        if blend_mode == "normal":
+            result.paste(img, box, img)
+        
+        elif blend_mode == "multiply":
+            bg_region = result.crop(box).copy()
+            bg_data = bg_region.load()
+            fg_data = img.load()
+            
+            for y in range(img.height):
+                for x in range(img.width):
+                    fg_r, fg_g, fg_b, fg_a = fg_data[x, y]
+                    if fg_a == 0:
+                        continue
+                    bg_r, bg_g, bg_b, bg_a = bg_data[x, y]
+                    
+                    r = (fg_r * bg_r) // 255
+                    g = (fg_g * bg_g) // 255
+                    b = (fg_b * bg_b) // 255
+                    a = (fg_a * bg_a) // 255
+                    
+                    bg_data[x, y] = (r, g, b, a)
+            
+            result.paste(bg_region, box)
+        
+        elif blend_mode == "screen":
+            bg_region = result.crop(box).copy()
+            bg_data = bg_region.load()
+            fg_data = img.load()
+            
+            for y in range(img.height):
+                for x in range(img.width):
+                    fg_r, fg_g, fg_b, fg_a = fg_data[x, y]
+                    if fg_a == 0:
+                        continue
+                    bg_r, bg_g, bg_b, bg_a = bg_data[x, y]
+                    
+                    r = 255 - ((255 - fg_r) * (255 - bg_r) // 255)
+                    g = 255 - ((255 - fg_g) * (255 - bg_g) // 255)
+                    b = 255 - ((255 - fg_b) * (255 - bg_b) // 255)
+                    a = (fg_a * bg_a) // 255
+                    
+                    bg_data[x, y] = (r, g, b, a)
+            
+            result.paste(bg_region, box)
+        
+        else:
+            result.paste(img, box, img)
     
     return result
 def export_to_png(project: Project, filepath: str) -> bool:
-    """Экспортирует проект в PNG файл"""
     try:
         preview = render_preview(project)
         preview.save(filepath, "PNG")

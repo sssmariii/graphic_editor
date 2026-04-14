@@ -16,18 +16,17 @@ from core.filters import remove_background
 from core.signals import progress_tracker
 from core.canvas import render_preview
 from PIL import ImageDraw
+from PIL import ImageFont
 
 _current_project: Optional[Project] = None
 
 def create_project(width: int = 800, height: int = 600) -> Dict[str, Any]:
-    """Создаёт новый проект"""
     global _current_project
     _current_project = Project(width, height)
     return {"status": "ok", "project_id": 1, "width": width, "height": height}
 
 
 def add_layer(name: str, image_path: str = None) -> Dict[str, Any]:
-    """Добавляет слой (из файла или пустой)"""
     global _current_project
     if _current_project is None:
         return {"error": "No active project"}
@@ -71,7 +70,6 @@ def get_layers() -> Dict[str, Any]:
 
 
 def get_preview() -> Dict[str, Any]:
-    """Возвращает информацию о превью"""
     if _current_project is None:
         return {"error": "No project"}
     
@@ -80,7 +78,6 @@ def get_preview() -> Dict[str, Any]:
 
 
 def set_layer_visibility(layer_index: int, visible: bool) -> Dict[str, Any]:
-    """Включает/выключает видимость слоя"""
     if _current_project is None:
         return {"error": "No active project"}
     
@@ -91,7 +88,6 @@ def set_layer_visibility(layer_index: int, visible: bool) -> Dict[str, Any]:
 
 
 def set_layer_opacity(layer_index: int, opacity: int) -> Dict[str, Any]:
-    """Меняет прозрачность слоя (0-100)"""
     if _current_project is None:
         return {"error": "No active project"}
     
@@ -102,7 +98,6 @@ def set_layer_opacity(layer_index: int, opacity: int) -> Dict[str, Any]:
 
 
 def set_layer_blend_mode(layer_index: int, blend_mode: str) -> Dict[str, Any]:
-    """Устанавливает режим наложения слоя"""
     if _current_project is None:
         return {"error": "No active project"}
     
@@ -113,7 +108,6 @@ def set_layer_blend_mode(layer_index: int, blend_mode: str) -> Dict[str, Any]:
 
 
 def move_layer_up(layer_index: int) -> Dict[str, Any]:
-    """Перемещает слой выше"""
     if _current_project is None:
         return {"error": "No active project"}
     
@@ -123,7 +117,6 @@ def move_layer_up(layer_index: int) -> Dict[str, Any]:
 
 
 def move_layer_down(layer_index: int) -> Dict[str, Any]:
-    """Перемещает слой ниже"""
     if _current_project is None:
         return {"error": "No active project"}
     
@@ -133,7 +126,6 @@ def move_layer_down(layer_index: int) -> Dict[str, Any]:
 
 
 def move_layer_to_top(layer_index: int) -> Dict[str, Any]:
-    """Перемещает слой наверх"""
     if _current_project is None:
         return {"error": "No active project"}
     
@@ -621,3 +613,37 @@ def draw_line_on_layer(layer_index: int, x1: int, y1: int, x2: int, y2: int, col
     
     except Exception as e:
         return {"error": f"Failed to draw line: {str(e)}"}
+    
+def draw_text_on_layer(layer_index: int, x: int, y: int, text: str, color: str, size: int = 20) -> Dict[str, Any]:
+    global _current_project
+    if _current_project is None:
+        return {"error": "No active project"}
+    
+    if not (0 <= layer_index < len(_current_project.layers)):
+        return {"error": "Invalid layer index"}
+    
+    layer = _current_project.layers[layer_index]
+    
+    if layer.locked:
+        return {"error": "Layer is locked"}
+    
+    if layer.image is None:
+        layer.image = Image.new('RGBA', (_current_project.width, _current_project.height), (0, 0, 0, 0))
+    
+    try:
+        draw = ImageDraw.Draw(layer.image)
+        
+        try:
+            font = ImageFont.truetype("arial.ttf", size)
+        except:
+            try:
+                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", size)
+            except:
+                font = ImageFont.load_default()
+        
+        draw.text((x, y), text, fill=color, font=font)
+        _current_project._save_to_history()
+        return {"status": "ok", "text": text, "position": (x, y)}
+    
+    except Exception as e:
+        return {"error": f"Failed to draw text: {str(e)}"}

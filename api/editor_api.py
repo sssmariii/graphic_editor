@@ -17,6 +17,7 @@ from core.signals import progress_tracker
 from core.canvas import render_preview
 from PIL import ImageDraw
 from PIL import ImageFont
+import sys
 
 _current_project: Optional[Project] = None
 
@@ -633,17 +634,67 @@ def draw_text_on_layer(layer_index: int, x: int, y: int, text: str, color: str, 
     try:
         draw = ImageDraw.Draw(layer.image)
         
-        try:
-            font = ImageFont.truetype("arial.ttf", size)
-        except:
+        font = None
+        
+        if sys.platform == 'darwin':
+            try:
+                font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", size)
+            except:
+                font = ImageFont.truetype("/System/Library/Fonts/Arial.ttf", size)
+        elif sys.platform == 'win32':
+            try:
+                font = ImageFont.truetype("arial.ttf", size)
+            except:
+                try:
+                    font = ImageFont.truetype("segoeui.ttf", size)
+                except:
+                    font = ImageFont.load_default()
+        else:
             try:
                 font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", size)
             except:
                 font = ImageFont.load_default()
         
+        if font is None:
+            font = ImageFont.load_default()
+        
         draw.text((x, y), text, fill=color, font=font)
         _current_project._save_to_history()
-        return {"status": "ok", "text": text, "position": (x, y)}
+        
+        return {"status": "ok", "text": text, "position": (x, y), "size": size}
     
     except Exception as e:
         return {"error": f"Failed to draw text: {str(e)}"}
+    
+def erase_on_layer(layer_index: int, x: int, y: int, size: int = 10) -> Dict[str, Any]:
+    global _current_project
+    if _current_project is None:
+        return {"error": "No active project"}
+    
+    if not (0 <= layer_index < len(_current_project.layers)):
+        return {"error": "Invalid layer index"}
+    
+    layer = _current_project.layers[layer_index]
+    
+    if layer.locked:
+        return {"error": "Layer is locked"}
+    
+    if layer.image is None:
+        layer.image = Image.new('RGBA', (_current_project.width, _current_project.height), (0, 0, 0, 0))
+    
+    try:
+        draw = ImageDraw.Draw(layer.image, 'RGBA')
+        
+        transparent = (0, 0, 0, 0)
+        
+        draw.ellipse(
+            [x - size, y - size, x + size, y + size],
+            fill=transparent,
+            outline=transparent
+        )
+        
+        _current_project._save_to_history()
+        return {"status": "ok", "x": x, "y": y, "size": size}
+    
+    except Exception as e:
+        return {"error": f"Failed to erase: {str(e)}"}

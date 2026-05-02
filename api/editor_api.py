@@ -79,30 +79,36 @@ def get_preview() -> Dict[str, Any]:
 
 
 def set_layer_visibility(layer_index: int, visible: bool) -> Dict[str, Any]:
+    global _current_project
     if _current_project is None:
         return {"error": "No active project"}
     
     if 0 <= layer_index < len(_current_project.layers):
+        _current_project._save_to_history()  # ← ДО
         _current_project.layers[layer_index].set_visibility(visible)
         return {"status": "ok"}
     return {"error": "Invalid layer index"}
 
 
 def set_layer_opacity(layer_index: int, opacity: int) -> Dict[str, Any]:
+    global _current_project
     if _current_project is None:
         return {"error": "No active project"}
     
     if 0 <= layer_index < len(_current_project.layers):
+        _current_project._save_to_history()  # ← ДО
         _current_project.layers[layer_index].set_opacity(opacity)
         return {"status": "ok"}
-    return {"error": "Invalid layer index"}
+
 
 
 def set_layer_blend_mode(layer_index: int, blend_mode: str) -> Dict[str, Any]:
+    global _current_project
     if _current_project is None:
         return {"error": "No active project"}
     
     if 0 <= layer_index < len(_current_project.layers):
+        _current_project._save_to_history()  # ← ДО
         _current_project.layers[layer_index].set_blend_mode(blend_mode)
         return {"status": "ok"}
     return {"error": "Invalid layer index"}
@@ -146,10 +152,12 @@ def move_layer_to_bottom(layer_index: int) -> Dict[str, Any]:
 
 
 def set_layer_position(layer_index: int, x: int, y: int) -> Dict[str, Any]:
+    global _current_project
     if _current_project is None:
         return {"error": "No active project"}
     
     if 0 <= layer_index < len(_current_project.layers):
+        _current_project._save_to_history()  # ← ДО
         _current_project.layers[layer_index].x = x
         _current_project.layers[layer_index].y = y
         return {"status": "ok"}
@@ -209,6 +217,7 @@ def undo() -> Dict[str, Any]:
     if _current_project.undo():
         return {"status": "ok"}
     return {"error": "Nothing to undo"}
+
 
 def redo() -> Dict[str, Any]:
     global _current_project
@@ -576,15 +585,9 @@ def draw_on_layer(layer_index: int, x: int, y: int, color: str, size: int = 5) -
     
     try:
         draw = ImageDraw.Draw(layer.image)
-        
-        if isinstance(color, str):
-            draw.ellipse([x - size, y - size, x + size, y + size], fill=color, outline=color)
-        else:
-            draw.ellipse([x - size, y - size, x + size, y + size], fill=color, outline=color)
-        
+        draw.ellipse([x - size, y - size, x + size, y + size], fill=color, outline=color)
         _current_project._save_to_history()
         return {"status": "ok", "x": x, "y": y, "color": color, "size": size}
-    
     except Exception as e:
         return {"error": f"Failed to draw: {str(e)}"}
 
@@ -608,10 +611,8 @@ def draw_line_on_layer(layer_index: int, x1: int, y1: int, x2: int, y2: int, col
     try:
         draw = ImageDraw.Draw(layer.image)
         draw.line([x1, y1, x2, y2], fill=color, width=size)
-        
-        _current_project._save_to_history()
+        _current_project._save_to_history()  # ← ПОСЛЕ
         return {"status": "ok"}
-    
     except Exception as e:
         return {"error": f"Failed to draw line: {str(e)}"}
     
@@ -632,8 +633,6 @@ def draw_text_on_layer(layer_index: int, x: int, y: int, text: str, color: str, 
         layer.image = Image.new('RGBA', (_current_project.width, _current_project.height), (0, 0, 0, 0))
     
     try:
-        draw = ImageDraw.Draw(layer.image)
-        
         font = None
         
         if sys.platform == 'darwin':
@@ -658,7 +657,21 @@ def draw_text_on_layer(layer_index: int, x: int, y: int, text: str, color: str, 
         if font is None:
             font = ImageFont.load_default()
         
-        draw.text((x, y), text, fill=color, font=font)
+        scale = 2
+        temp_width = len(text) * size * scale
+        temp_height = int(size * 2 * scale)
+        
+        temp_img = Image.new('RGBA', (temp_width, temp_height), (0, 0, 0, 0))
+        temp_draw = ImageDraw.Draw(temp_img)
+        
+        temp_draw.text((5 * scale, 5 * scale), text, fill=color, font=font)
+        
+        new_width = int(temp_width / scale)
+        new_height = int(temp_height / scale)
+        temp_img = temp_img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        
+        layer.image.paste(temp_img, (x, y), temp_img)
+        
         _current_project._save_to_history()
         
         return {"status": "ok", "text": text, "position": (x, y), "size": size}
@@ -684,17 +697,11 @@ def erase_on_layer(layer_index: int, x: int, y: int, size: int = 10) -> Dict[str
     
     try:
         draw = ImageDraw.Draw(layer.image, 'RGBA')
-        
         transparent = (0, 0, 0, 0)
-        
-        draw.ellipse(
-            [x - size, y - size, x + size, y + size],
-            fill=transparent,
-            outline=transparent
-        )
-        
-        _current_project._save_to_history()
+        draw.ellipse([x - size, y - size, x + size, y + size], fill=transparent, outline=transparent)
+        _current_project._save_to_history()  # ← ПОСЛЕ
         return {"status": "ok", "x": x, "y": y, "size": size}
-    
     except Exception as e:
         return {"error": f"Failed to erase: {str(e)}"}
+    
+set_layer_opacity

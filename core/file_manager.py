@@ -5,10 +5,8 @@ from core.project import Project
 from core.layer import Layer
 
 def save_project(project: Project, folder_path: str):
-    """Сохраняет проект в папку"""
     os.makedirs(folder_path, exist_ok=True)
     
-    # Сохраняем метаданные
     data = {
         "width": project.width,
         "height": project.height,
@@ -17,11 +15,9 @@ def save_project(project: Project, folder_path: str):
     }
     
     for i, layer in enumerate(project.layers):
-        # Сохраняем изображение слоя
         if layer.image:
             layer.image.save(f"{folder_path}/layer_{i}.png")
         
-        # Сохраняем данные слоя
         data["layers"].append({
             "name": layer.name,
             "visible": layer.visible,
@@ -36,7 +32,6 @@ def save_project(project: Project, folder_path: str):
         json.dump(data, f, indent=2)
 
 def load_project(folder_path: str) -> Project:
-    """Загружает проект из папки"""
     with open(f"{folder_path}/project.json", "r") as f:
         data = json.load(f)
     

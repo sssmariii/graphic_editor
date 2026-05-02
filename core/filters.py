@@ -26,7 +26,6 @@ def apply_filter_to_layer(image: Image.Image, filter_type: str, value: float) ->
 
 def rotate_layer(image: Image.Image, angle: float) -> Image.Image:
     
-    # Для углов кратных 90 используем transpose (быстрее)
     if angle == 90:
         return image.transpose(Image.ROTATE_90)
     elif angle == 180:
@@ -34,7 +33,6 @@ def rotate_layer(image: Image.Image, angle: float) -> Image.Image:
     elif angle == 270:
         return image.transpose(Image.ROTATE_270)
     else:
-        # Для произвольного угла используем rotate
         return image.rotate(angle, expand=True, fillcolor=(0, 0, 0, 0))
 
 def scale_layer(image: Image.Image, scale_x: float, scale_y: float = None) -> Image.Image:

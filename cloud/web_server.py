@@ -181,6 +181,52 @@ def share_project(share_code):
     </html>
     """
 
+# ========== ИСТОРИЯ ВЕРСИЙ ==========
+
+from cloud.version_history import list_versions, load_version
+
+@app.route('/api/projects/<project_id>/versions', methods=['GET'])
+def api_project_versions(project_id):
+    """Получить список версий проекта"""
+    token = request.headers.get('Authorization', '').replace('Bearer ', '')
+    if not token:
+        token = session.get('user_token')
+    
+    if not token:
+        return jsonify({"ok": False, "error": "Not authenticated"})
+    
+    # Проверяем доступ к проекту
+    from cloud.cloud_saver import load_project_from_cloud
+    project_check = load_project_from_cloud(project_id, token)
+    if not project_check.get("ok"):
+        return jsonify({"ok": False, "error": "Project not found or access denied"})
+    
+    result = list_versions(project_id)
+    return jsonify(result)
+
+@app.route('/api/projects/<project_id>/versions/<version_id>', methods=['POST'])
+def api_restore_version(project_id, version_id):
+    """Восстановить проект из версии"""
+    token = request.headers.get('Authorization', '').replace('Bearer ', '')
+    if not token:
+        token = session.get('user_token')
+    
+    if not token:
+        return jsonify({"ok": False, "error": "Not authenticated"})
+    
+    # Загружаем версию
+    version_result = load_version(project_id, version_id)
+    if not version_result.get("ok"):
+        return jsonify({"ok": False, "error": "Version not found"})
+    
+    # Сохраняем как новый проект
+    from cloud.cloud_saver import save_project_to_cloud
+    project_data = version_result.get("project")
+    name = version_result.get("version_name", "Restored version")
+    
+    result = save_project_to_cloud(project_data, token, f"{name} (restored)")
+    return jsonify(result)
+
 # ========== ЗАПУСК ==========
 
 if __name__ == '__main__':

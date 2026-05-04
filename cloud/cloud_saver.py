@@ -7,6 +7,7 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from api.editor_api import export_project_to_cloud, import_project_from_cloud
+from cloud.version_history import save_version
 
 CLOUD_PROJECTS_DIR = os.path.join(os.path.expanduser("~"), "GraphicEditorCloud", "projects")
 
@@ -47,6 +48,12 @@ def save_project_to_cloud(project, token: str, name: str = "Без назван�
     cloud_file = os.path.join(CLOUD_PROJECTS_DIR, f"{project_id}.json")
     with open(cloud_file, "w", encoding="utf-8") as f:
         json.dump(cloud_json, f, indent=2, ensure_ascii=False)
+    
+    # 3. Сохраняем версию в историю
+    try:
+        save_version(project_id, cloud_json, name)
+    except Exception as e:
+        print(f"Warning: Failed to save version history: {e}")
     
     return {"ok": True, "project_id": project_id, "cloud_file": cloud_file}
 

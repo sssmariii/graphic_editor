@@ -75,3 +75,49 @@ def remove_background(image: Image.Image, threshold: int = 128) -> Image.Image:
                 pixels[x, y] = (r, g, b, 0)
     
     return image
+
+def flood_fill(image: Image.Image, x: int, y: int, new_color_rgb: tuple, tolerance: int = 0) -> Image.Image:
+    if image is None:
+        raise ValueError("Image is None")
+    
+    if image.mode != 'RGBA':
+        image = image.convert('RGBA')
+    
+    img = image.copy()
+    pixels = img.load()
+    width, height = img.size
+    
+    if x < 0 or x >= width or y < 0 or y >= height:
+        return img
+    
+    target = pixels[x, y][:3]
+    
+    if target == new_color_rgb:
+        return img
+    
+    stack = [(x, y)]
+    visited = set()
+    visited.add((x, y))
+    
+    while stack:
+        cx, cy = stack.pop()
+        
+        current = pixels[cx, cy][:3]
+        
+        if tolerance > 0:
+            diff = abs(current[0] - target[0]) + abs(current[1] - target[1]) + abs(current[2] - target[2])
+            if diff > tolerance * 3:
+                continue
+        else:
+            if current != target:
+                continue
+        
+        pixels[cx, cy] = (new_color_rgb[0], new_color_rgb[1], new_color_rgb[2], 255)
+        
+        neighbors = [(cx + 1, cy), (cx - 1, cy), (cx, cy + 1), (cx, cy - 1)]
+        for nx, ny in neighbors:
+            if 0 <= nx < width and 0 <= ny < height and (nx, ny) not in visited:
+                visited.add((nx, ny))
+                stack.append((nx, ny))
+    
+    return img

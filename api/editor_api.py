@@ -15,6 +15,7 @@ from core.filters import crop_layer
 from core.filters import remove_background
 from core.signals import progress_tracker
 from core.canvas import render_preview
+from core.filters import flood_fill
 from PIL import ImageDraw
 from PIL import ImageFont
 import sys
@@ -699,9 +700,44 @@ def erase_on_layer(layer_index: int, x: int, y: int, size: int = 10) -> Dict[str
         draw = ImageDraw.Draw(layer.image, 'RGBA')
         transparent = (0, 0, 0, 0)
         draw.ellipse([x - size, y - size, x + size, y + size], fill=transparent, outline=transparent)
-        _current_project._save_to_history()  # ← ПОСЛЕ
+        _current_project._save_to_history()
         return {"status": "ok", "x": x, "y": y, "size": size}
     except Exception as e:
         return {"error": f"Failed to erase: {str(e)}"}
     
 set_layer_opacity
+
+def flood_fill_api(layer_index: int, x: int, y: int, new_color: str, tolerance: int = 0) -> Dict[str, Any]:
+    global _current_project
+    if _current_project is None:
+        return {"error": "No active project"}
+    
+    if not (0 <= layer_index < len(_current_project.layers)):
+        return {"error": "Invalid layer index"}
+    
+    layer = _current_project.layers[layer_index]
+    
+    if layer.locked:
+        return {"error": "Layer is locked"}
+    
+    if layer.image is None:
+        return {"error": "Layer has no image"}
+    
+    try:
+        new_color = new_color.lstrip('#')
+        if len(new_color) == 6:
+            new_color_rgb = tuple(int(new_color[i:i+2], 16) for i in (0, 2, 4))
+        else:
+            return {"error": f"Invalid color format: {new_color}. Use #RRGGBB"}
+        
+        _current_project._save_to_history()
+        
+        layer.image = flood_fill(layer.image, x, y, new_color_rgb, tolerance)
+        
+        return {"status": "ok", 
+                "x": x, "y": y, 
+                "new_color": new_color, 
+                "tolerance": tolerance}
+    
+    except Exception as e:
+        return {"error": f"Failed to flood fill: {str(e)}"}

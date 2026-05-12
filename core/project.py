@@ -29,12 +29,13 @@ class Project:
         self.version = state["version"]
     
     def undo(self) -> bool:
-        state = self.history.undo()
+        current_state = self._get_state()
+        state = self.history.undo(current_state)
         if state:
             self._restore_state(state)
             return True
         return False
-    
+
     def redo(self) -> bool:
         state = self.history.redo()
         if state:

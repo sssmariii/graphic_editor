@@ -207,3 +207,8 @@ marimo/_lsp/
 __marimo__/
 
 
+.DS_Store
+.vscode/
+__pycache__/
+*.pyc
+temp_ai_image.png

@@ -2,6 +2,7 @@ import sys
 import base64
 import math
 import os
+import argparse
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QMenuBar, QToolBar, QStatusBar,
     QDockWidget, QWidget, QVBoxLayout, QSlider, QComboBox, QLabel,
@@ -10,8 +11,8 @@ from PySide6.QtWidgets import (
     QLineEdit, QTabWidget, QFrame, QFileDialog
 )
 from PySide6 import QtCore
-from PySide6.QtCore import Qt, QPointF, QUrl
-from PySide6.QtGui import QPainter, QMouseEvent, QPen, QColor, QBrush, QWheelEvent, QIcon, QPixmap, QDesktopServices, QGuiApplication
+from PySide6.QtCore import Qt, QPointF, QUrl, QTimer
+from PySide6.QtGui import QPainter, QMouseEvent, QPen, QColor, QBrush, QWheelEvent, QIcon, QPixmap, QDesktopServices, QGuiApplication, QKeySequence
 
 from api.editor_api import (
     create_project, add_layer, get_layers,
@@ -22,7 +23,11 @@ from api.editor_api import (
     remove_background_api,
     set_layer_position,
     save_current_project, load_project_from_folder,
-    undo, redo
+    undo, redo,
+    import_psd, export_to_pdf_api, export_project,
+    apply_filter_to_layer_api, rotate_layer_api, scale_layer_api,
+    crop_layer_api, resize_canvas_api,
+    erase_on_layer
 )
 
 from cloud import (
@@ -38,7 +43,19 @@ except ImportError:
     TEXT_SUPPORT = False
     print("⚠️ Функция draw_text_on_layer не найдена. Текст не будет рисоваться.")
 
-# ---------------------------- ДИАЛОГ ВХОДА/РЕГИСТРАЦИИ ----------------------------
+try:
+    from api.editor_api import flood_fill_api
+    FLOOD_FILL_SUPPORT = True
+except ImportError:
+    FLOOD_FILL_SUPPORT = False
+    print("⚠️ Функция flood_fill_api не найдена. Заливка будет недоступна.")
+
+# AI интеграция
+from ai_integration import handle_ai_generation
+
+# ----------------------------------------------------------------------
+# Диалог входа / регистрации (без изменений)
+# ----------------------------------------------------------------------
 class LoginDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -197,7 +214,9 @@ class LoginDialog(QDialog):
         else:
             QMessageBox.warning(self, "Ошибка", res.get("error", "Ошибка регистрации"))
 
-# ---------------------------- ДИАЛОГ ВЫБОРА ШАБЛОНА ----------------------------
+# ----------------------------------------------------------------------
+# Диалог выбора шаблона (без изменений)
+# ----------------------------------------------------------------------
 class TemplateDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -250,7 +269,9 @@ class TemplateDialog(QDialog):
             return self.templates[idx]
         return None
 
-# ---------------------------- ХОЛСТ ----------------------------
+# ----------------------------------------------------------------------
+# Холст (Canvas) – исправлен wheelEvent + ластик через erase_on_layer + заливка
+# ----------------------------------------------------------------------
 class Canvas(QGraphicsView):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -285,11 +306,6 @@ class Canvas(QGraphicsView):
         self.current_zoom = 1.0
 
     def set_tool(self, tool):
-        if tool == "eraser" and self.current_tool != "eraser":
-            self.last_color = self.brush_color
-            self.brush_color = "#FFFFFF"
-        elif tool != "eraser" and self.current_tool == "eraser":
-            self.brush_color = self.last_color
         self.current_tool = tool
 
     def set_brush_size(self, size):
@@ -339,8 +355,31 @@ class Canvas(QGraphicsView):
         if hasattr(main_window, 'update_zoom'):
             main_window.update_zoom(percent)
 
+    def zoom_in(self):
+        factor = 1.2
+        self.scale(factor, factor)
+        self.current_zoom *= factor
+        main_window = self.window()
+        if hasattr(main_window, 'update_zoom_from_canvas'):
+            main_window.update_zoom_from_canvas(int(self.current_zoom * 100))
+
+    def zoom_out(self):
+        factor = 0.8
+        self.scale(factor, factor)
+        self.current_zoom *= factor
+        main_window = self.window()
+        if hasattr(main_window, 'update_zoom_from_canvas'):
+            main_window.update_zoom_from_canvas(int(self.current_zoom * 100))
+
     def wheelEvent(self, event: QWheelEvent):
-        factor = 1.1 if event.angleDelta().y() > 0 else 0.9
+        delta = event.angleDelta().y()
+        if abs(delta) < 1:
+            return
+        # Если дельта положительная – увеличиваем, отрицательная – уменьшаем
+        if delta > 0:
+            factor = 1.1
+        else:
+            factor = 0.9
         self.scale(factor, factor)
         self.current_zoom *= factor
         main_window = self.window()
@@ -394,6 +433,18 @@ class Canvas(QGraphicsView):
                 self.current_tool = "brush"
                 QMessageBox.information(self.window(), "Пипетка", f"Выбран цвет: {color}")
                 return
+            elif self.current_tool == "flood_fill":
+                if not FLOOD_FILL_SUPPORT:
+                    QMessageBox.warning(self.window(), "Ошибка", "Функция заливки ещё не добавлена в бэкенд.")
+                    return
+                scene_pos = self.mapToScene(event.pos())
+                x, y = int(scene_pos.x()), int(scene_pos.y())
+                res = flood_fill_api(self.current_layer_index, x, y, self.brush_color)
+                if res.get("status") == "ok":
+                    self.update_canvas_image()
+                else:
+                    QMessageBox.warning(self.window(), "Ошибка", res.get("error", "Заливка не удалась"))
+                return
             self.drawing = True
             self.start_point = self.mapToScene(event.pos())
             self.end_point = self.start_point
@@ -445,13 +496,27 @@ class Canvas(QGraphicsView):
 
     def draw_point(self, point):
         x, y = int(point.x()), int(point.y())
-        draw_on_layer(self.current_layer_index, x, y, self.brush_color, self.brush_size)
+        if self.current_tool == "eraser":
+            erase_on_layer(self.current_layer_index, x, y, self.brush_size)
+        else:
+            draw_on_layer(self.current_layer_index, x, y, self.brush_color, self.brush_size)
         self.update_canvas_image()
 
     def draw_line(self, p1, p2):
         x1, y1 = int(p1.x()), int(p1.y())
         x2, y2 = int(p2.x()), int(p2.y())
-        draw_line_on_layer(self.current_layer_index, x1, y1, x2, y2, self.brush_color, self.brush_size)
+        if self.current_tool == "eraser":
+            steps = max(abs(x2 - x1), abs(y2 - y1))
+            if steps == 0:
+                erase_on_layer(self.current_layer_index, x1, y1, self.brush_size)
+            else:
+                for i in range(steps + 1):
+                    t = i / steps
+                    x = int(x1 + t * (x2 - x1))
+                    y = int(y1 + t * (y2 - y1))
+                    erase_on_layer(self.current_layer_index, x, y, self.brush_size)
+        else:
+            draw_line_on_layer(self.current_layer_index, x1, y1, x2, y2, self.brush_color, self.brush_size)
         self.update_canvas_image()
 
     def draw_rectangle(self, p1, p2):
@@ -482,9 +547,10 @@ class Canvas(QGraphicsView):
     def draw_line_shape(self, p1, p2):
         self.draw_line(p1, p2)
 
-# ---------------------------- ГЛАВНОЕ ОКНО ----------------------------
+# Главное окно (расширенное)
+
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, open_project_id=None):
         super().__init__()
         self.setWindowTitle("Graphitium")
         self.resize(1400, 900)
@@ -499,6 +565,9 @@ class MainWindow(QMainWindow):
         self._create_layers_panel()
 
         self.new_project_from_template()
+
+        if open_project_id:
+            QTimer.singleShot(500, lambda: self.try_open_project(open_project_id))
 
     def new_project_from_template(self):
         dialog = TemplateDialog(self)
@@ -521,55 +590,80 @@ class MainWindow(QMainWindow):
             self.refresh_layers_list()
             self.canvas.update_canvas_image()
 
+    # ---------------------- Меню (расширенное) ----------------------
     def _create_menu_bar(self):
         menubar = self.menuBar()
+        # Файл
         file_menu = menubar.addMenu("&Файл")
-        new_act = file_menu.addAction("Новый")
-        new_act.triggered.connect(self.new_project_from_template)
-        open_act = file_menu.addAction("Открыть...")
-        open_act.triggered.connect(self.open_project_local)
-        save_act = file_menu.addAction("Сохранить")
-        save_act.triggered.connect(self.save_project_local)
+        file_menu.addAction("Новый").triggered.connect(self.new_project_from_template)
+        file_menu.addAction("Открыть...").triggered.connect(self.open_project_local)
+        file_menu.addAction("Сохранить").triggered.connect(self.save_project_local)
         file_menu.addSeparator()
-        exit_act = file_menu.addAction("Выход")
-        exit_act.triggered.connect(self.close)
+        file_menu.addAction("Импорт PSD...").triggered.connect(self.import_psd_file)
+        file_menu.addAction("Экспорт PDF...").triggered.connect(self.export_pdf)
+        file_menu.addAction("Экспорт PNG...").triggered.connect(self.export_png)
+        file_menu.addSeparator()
+        file_menu.addAction("Выход").triggered.connect(self.close)
 
+        # Правка
         edit_menu = menubar.addMenu("&Правка")
-        undo_act = edit_menu.addAction("Отменить")
-        undo_act.triggered.connect(self.undo_action)
-        redo_act = edit_menu.addAction("Повторить")
-        redo_act.triggered.connect(self.redo_action)
+        self.undo_act = edit_menu.addAction("Отменить")
+        self.undo_act.setShortcut(QKeySequence.Undo)
+        self.undo_act.triggered.connect(self.undo_action)
+        self.redo_act = edit_menu.addAction("Повторить")
+        self.redo_act.setShortcuts([
+            QKeySequence(Qt.CTRL + Qt.Key_Y),
+            QKeySequence(Qt.CTRL + Qt.SHIFT + Qt.Key_Z)
+        ])
+        self.redo_act.triggered.connect(self.redo_action)
 
+        # Вид
         view_menu = menubar.addMenu("&Вид")
-        toggle_panels_act = view_menu.addAction("Показать панели")
-        toggle_panels_act.triggered.connect(self.toggle_panels)
+        view_menu.addAction("Показать панели").triggered.connect(self.toggle_panels)
 
+        # Слой (новое)
+        layer_menu = menubar.addMenu("&Слой")
+        # Поворот
+        rotate_menu = layer_menu.addMenu("Повернуть")
+        rotate_menu.addAction("90° по часовой").triggered.connect(self.rotate_90_cw)
+        rotate_menu.addAction("90° против часовой").triggered.connect(self.rotate_90_ccw)
+        rotate_menu.addAction("180°").triggered.connect(self.rotate_180)
+        rotate_menu.addAction("Произвольный...").triggered.connect(self.rotate_arbitrary)
+        layer_menu.addSeparator()
+        layer_menu.addAction("Масштабировать...").triggered.connect(self.scale_layer)
+        layer_menu.addAction("Обрезать...").triggered.connect(self.crop_layer)
+        layer_menu.addSeparator()
+        # Фильтры
+        filters_menu = layer_menu.addMenu("Фильтры")
+        brightness_menu = filters_menu.addMenu("Яркость")
+        brightness_menu.addAction("+10").triggered.connect(self.brightness_plus)
+        brightness_menu.addAction("-10").triggered.connect(self.brightness_minus)
+        contrast_menu = filters_menu.addMenu("Контраст")
+        contrast_menu.addAction("+10").triggered.connect(self.contrast_plus)
+        contrast_menu.addAction("-10").triggered.connect(self.contrast_minus)
+
+        # Изображение (новое)
+        image_menu = menubar.addMenu("&Изображение")
+        image_menu.addAction("Размер холста...").triggered.connect(self.resize_canvas_dialog)
+
+        # Облако
         cloud_menu = menubar.addMenu("&Облако")
-        cloud_menu.addAction("Сохранить в облако")
-        cloud_menu.addAction("Загрузить из облака")
-        cloud_menu.addAction("Мои проекты")
+        cloud_menu.addAction("Сохранить в облако").triggered.connect(self.save_to_cloud)
+        cloud_menu.addAction("Загрузить из облака").triggered.connect(self.load_from_cloud)
+        cloud_menu.addAction("Мои проекты").triggered.connect(self.show_cloud_projects)
         cloud_menu.addSeparator()
-        cloud_menu.addAction("Вход")
-        cloud_menu.addAction("Регистрация")
+        cloud_menu.addAction("Вход").triggered.connect(self.login_cloud)
+        cloud_menu.addAction("Регистрация").triggered.connect(self.login_cloud)
         cloud_menu.addSeparator()
-        share_act = cloud_menu.addAction("Поделиться")
-        share_act.triggered.connect(self.share_project)
+        cloud_menu.addAction("Поделиться").triggered.connect(self.share_project)
 
+        # Помощь
         help_menu = menubar.addMenu("&Помощь")
-        about_act = help_menu.addAction("О программе")
-        about_act.triggered.connect(self.about_action)
+        help_menu.addAction("О программе").triggered.connect(self.about_action)
 
-        cloud_menu.actions()[0].triggered.connect(self.save_to_cloud)
-        cloud_menu.actions()[1].triggered.connect(self.load_from_cloud)
-        cloud_menu.actions()[2].triggered.connect(self.show_cloud_projects)
-        cloud_menu.actions()[4].triggered.connect(self.login_cloud)
-        cloud_menu.actions()[5].triggered.connect(self.login_cloud)   # регистрация через тот же диалог
-
+    # (Старые методы (без изменений) 
     def toggle_panels(self):
-        """Показывает или скрывает левую панель инструментов и все док-виджеты справа"""
-        # Скрываем/показываем левую панель инструментов
         self.toolbar.setVisible(not self.toolbar.isVisible())
-        # Скрываем/показываем правые док-виджеты (свойства и слои)
         for widget in self.findChildren(QDockWidget):
             widget.setVisible(not widget.isVisible())
 
@@ -593,7 +687,7 @@ class MainWindow(QMainWindow):
             else:
                 QMessageBox.warning(self, "Ошибка", res.get("error", "Нечего отменять"))
         except Exception as e:
-            QMessageBox.warning(self, "Ошибка", f"undo не поддерживается: {e}")
+            QMessageBox.warning(self, "Ошибка", f"undo не поддержижается: {e}")
 
     def redo_action(self):
         try:
@@ -604,7 +698,7 @@ class MainWindow(QMainWindow):
             else:
                 QMessageBox.warning(self, "Ошибка", res.get("error", "Нечего повторять"))
         except Exception as e:
-            QMessageBox.warning(self, "Ошибка", f"redo не поддерживается: {e}")
+            QMessageBox.warning(self, "Ошибка", f"redo не поддержижается: {e}")
 
     def _create_toolbar(self):
         self.toolbar = QToolBar("Инструменты")
@@ -612,22 +706,27 @@ class MainWindow(QMainWindow):
         self.toolbar.setIconSize(QtCore.QSize(24, 24))
 
         tools = {
-            "Кисть": "brush",
-            "Ластик": "eraser.png",
-            "Пипетка": "eyedropper",
-            "Линия": "line",
-            "Прямоугольник": "rectangle",
-            "Круг": "circle",
-            "Текст": "text",
-            "Заливка": None,
-            "AI": "ai",
-            "Удалить фон": "remove_bg",
-            "Перемещение": "move"
+            "Кисть": ("brush", "brush.png"),
+            "Ластик": ("eraser", "eraser-2.png"),
+            "Пипетка": ("eyedropper", "pipette.png"),
+            "Линия": ("line", "line.png"),
+            "Прямоугольник": ("rectangle", "square-2.png"),
+            "Круг": ("circle", "circle.png"),
+            "Текст": ("text", "type-outline.png"),
+            "Заливка": ("flood_fill", "paint-bucket-2.png"),
+            "AI": ("ai", "bot.png"),   # <--- ИСПРАВЛЕНО: добавлен ключ "ai"
+            "Удалить фон": ("remove_bg", "background.remover.png"),
+            "Перемещение": ("move", "move.png"),
         }
 
-        for name, action_key in tools.items():
-            act = self.toolbar.addAction(name)
+        for name, (action_key, icon_file) in tools.items():
+            if icon_file:
+                icon_path = os.path.join("icons", icon_file)
+                act = self.toolbar.addAction(QIcon(icon_path), name)
+            else:
+                act = self.toolbar.addAction(name)
             act.setToolTip(name)
+
             if action_key == "brush":
                 act.triggered.connect(lambda: self.canvas.set_tool("brush"))
             elif action_key == "eraser":
@@ -642,20 +741,25 @@ class MainWindow(QMainWindow):
                 act.triggered.connect(lambda: self.canvas.set_tool("circle"))
             elif action_key == "text":
                 act.triggered.connect(lambda: self.canvas.set_tool("text"))
-            elif action_key == "ai":
-                act.triggered.connect(lambda: QMessageBox.information(self, "AI", "Функция в разработке"))
+            elif action_key == "flood_fill":
+                act.triggered.connect(lambda: self.canvas.set_tool("flood_fill"))
             elif action_key == "remove_bg":
                 act.triggered.connect(self.remove_background)
             elif action_key == "move":
                 act.triggered.connect(lambda: self.canvas.set_tool("move"))
+            elif action_key == "ai":
+                # Правильный вызов AI
+                act.triggered.connect(lambda: handle_ai_generation(self))
             else:
                 act.triggered.connect(lambda _, n=name: print(f"Инструмент '{n}' пока не реализован"))
 
-        color_btn = self.toolbar.addAction("Цвет")
+        color_icon = os.path.join("icons", "palette.png")
+        color_btn = self.toolbar.addAction(QIcon(color_icon), "Цвет")
         color_btn.setToolTip("Выбрать цвет для кисти и фигур")
         color_btn.triggered.connect(self.choose_color)
 
-        cloud_btn = self.toolbar.addAction("Облако")
+        cloud_icon = os.path.join("icons", "cloud-2.png")
+        cloud_btn = self.toolbar.addAction(QIcon(cloud_icon), "Облако")
         cloud_btn.setToolTip("Открыть веб-страницу «Мои проекты»")
         cloud_btn.triggered.connect(self.open_cloud_web)
 
@@ -683,8 +787,10 @@ class MainWindow(QMainWindow):
     def _create_status_bar(self):
         self.statusBar = QStatusBar()
         self.setStatusBar(self.statusBar)
+        self.title_label = QLabel("Graphitium")
         self.coords_label = QLabel("X: 0, Y: 0")
         self.zoom_label = QLabel("100%")
+        self.statusBar.addWidget(self.title_label)
         self.statusBar.addWidget(self.coords_label)
         self.statusBar.addWidget(self.zoom_label)
 
@@ -937,9 +1043,13 @@ class MainWindow(QMainWindow):
         project_id = projects["projects"][0]["id"]
         res = create_share_link(project_id, self.token, can_edit=False)
         if res.get("ok"):
-            clipboard = QGuiApplication.clipboard()
-            clipboard.setText(res["url"])
-            QMessageBox.information(self, "Ссылка скопирована", f"Ссылка для просмотра:\n{res['url']}\n\nСкопирована в буфер обмена.")
+            link = res.get("url") or res.get("link")
+            if link:
+                clipboard = QGuiApplication.clipboard()
+                clipboard.setText(link)
+                QMessageBox.information(self, "Ссылка скопирована", f"Ссылка для просмотра:\n{link}\n\nСкопирована в буфер обмена.")
+            else:
+                QMessageBox.warning(self, "Ошибка", "Не удалось получить ссылку")
         else:
             QMessageBox.warning(self, "Ошибка", res.get("error", "Не удалось создать ссылку"))
 
@@ -1013,40 +1123,275 @@ class MainWindow(QMainWindow):
     def show_cloud_projects(self):
         QDesktopServices.openUrl(QUrl("http://localhost:5000"))
 
+    def try_open_project(self, project_id):
+        if self.token:
+            self.open_project_from_cloud(project_id)
+        else:
+            reply = QMessageBox.question(self, "Открытие проекта", 
+                                         "Для открытия проекта нужно войти в облако. Выполнить вход сейчас?",
+                                         QMessageBox.Yes | QMessageBox.No)
+            if reply == QMessageBox.Yes:
+                self.login_cloud()
+                QTimer.singleShot(500, lambda: self.try_open_project(project_id))
+            else:
+                QMessageBox.information(self, "Отмена", "Проект не открыт. Войдите и повторите.")
 
+    def open_project_from_cloud(self, project_id):
+        if not self.token:
+            QMessageBox.warning(self, "Ошибка", "Вы не вошли в облако")
+            return
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            data = load_project_from_cloud(project_id, self.token)
+            if data.get("ok"):
+                from api.editor_api import import_project_from_cloud
+                import_project_from_cloud(data["project"])
+                self.refresh_layers_list()
+                self.canvas.update_canvas_image()
+                QMessageBox.information(self, "Успех", "Проект загружен из облака")
+            else:
+                QMessageBox.warning(self, "Ошибка", data.get("error", "Не удалось загрузить проект"))
+        finally:
+            QApplication.restoreOverrideCursor()
+
+    # ---------------------- НОВЫЕ МЕТОДЫ (экспорт PNG, импорт PSD, PDF, фильтры, повороты, масштаб, обрезка, размер холста) ----------------------
+    def export_png(self):
+        filepath, _ = QFileDialog.getSaveFileName(self, "Сохранить PNG", "", "PNG files (*.png)")
+        if filepath:
+            res = export_project(filepath)
+            if res.get("status") == "ok":
+                QMessageBox.information(self, "Успех", "PNG сохранён")
+            else:
+                QMessageBox.warning(self, "Ошибка", res.get("error", "Не удалось сохранить PNG"))
+
+    def import_psd_file(self):
+        filepath, _ = QFileDialog.getOpenFileName(self, "Выберите PSD-файл", "", "PSD files (*.psd)")
+        if filepath:
+            res = import_psd(filepath)
+            if res.get("status") == "ok":
+                self.refresh_layers_list()
+                self.canvas.update_canvas_image()
+                QMessageBox.information(self, "Успех", f"PSD загружен, слоёв: {res.get('layers')}")
+            else:
+                QMessageBox.warning(self, "Ошибка", res.get("error", "Не удалось импортировать PSD"))
+
+    def export_pdf(self):
+        filepath, _ = QFileDialog.getSaveFileName(self, "Сохранить PDF", "", "PDF files (*.pdf)")
+        if filepath:
+            res = export_to_pdf_api(filepath)
+            if res.get("status") == "ok":
+                QMessageBox.information(self, "Успех", "PDF сохранён")
+            else:
+                QMessageBox.warning(self, "Ошибка", res.get("error", "Не удалось сохранить PDF"))
+
+    def rotate_90_cw(self):
+        if self.current_layer_index is None:
+            QMessageBox.warning(self, "Ошибка", "Выберите слой")
+            return
+        res = rotate_layer_api(self.current_layer_index, 90)
+        if res.get("status") == "ok":
+            self.refresh_layers_list()
+            self.canvas.update_canvas_image()
+        else:
+            QMessageBox.warning(self, "Ошибка", res.get("error"))
+
+    def rotate_90_ccw(self):
+        if self.current_layer_index is None:
+            QMessageBox.warning(self, "Ошибка", "Выберите слой")
+            return
+        res = rotate_layer_api(self.current_layer_index, -90)
+        if res.get("status") == "ok":
+            self.refresh_layers_list()
+            self.canvas.update_canvas_image()
+        else:
+            QMessageBox.warning(self, "Ошибка", res.get("error"))
+
+    def rotate_180(self):
+        if self.current_layer_index is None:
+            QMessageBox.warning(self, "Ошибка", "Выберите слой")
+            return
+        res = rotate_layer_api(self.current_layer_index, 180)
+        if res.get("status") == "ok":
+            self.refresh_layers_list()
+            self.canvas.update_canvas_image()
+        else:
+            QMessageBox.warning(self, "Ошибка", res.get("error"))
+
+    def rotate_arbitrary(self):
+        if self.current_layer_index is None:
+            QMessageBox.warning(self, "Ошибка", "Выберите слой")
+            return
+        angle, ok = QInputDialog.getDouble(self, "Произвольный поворот", "Угол (градусы):", 0, -360, 360, 1)
+        if ok:
+            res = rotate_layer_api(self.current_layer_index, angle)
+            if res.get("status") == "ok":
+                self.refresh_layers_list()
+                self.canvas.update_canvas_image()
+            else:
+                QMessageBox.warning(self, "Ошибка", res.get("error"))
+
+    def scale_layer(self):
+        if self.current_layer_index is None:
+            QMessageBox.warning(self, "Ошибка", "Выберите слой")
+            return
+        factor, ok = QInputDialog.getDouble(self, "Масштабирование слоя", "Коэффициент (например, 1.5 для увеличения, 0.5 для уменьшения):", 1.0, 0.1, 10.0, 2)
+        if ok:
+            res = scale_layer_api(self.current_layer_index, factor, factor)
+            if res.get("status") == "ok":
+                self.refresh_layers_list()
+                self.canvas.update_canvas_image()
+            else:
+                QMessageBox.warning(self, "Ошибка", res.get("error"))
+
+    def crop_layer(self):
+        if self.current_layer_index is None:
+            QMessageBox.warning(self, "Ошибка", "Выберите слой")
+            return
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Обрезка слоя")
+        layout = QVBoxLayout(dialog)
+        form = QFormLayout()
+        x_edit = QLineEdit("0")
+        y_edit = QLineEdit("0")
+        w_edit = QLineEdit("100")
+        h_edit = QLineEdit("100")
+        form.addRow("X:", x_edit)
+        form.addRow("Y:", y_edit)
+        form.addRow("Ширина:", w_edit)
+        form.addRow("Высота:", h_edit)
+        layout.addLayout(form)
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        if dialog.exec() == QDialog.Accepted:
+            try:
+                x = int(x_edit.text())
+                y = int(y_edit.text())
+                w = int(w_edit.text())
+                h = int(h_edit.text())
+            except:
+                QMessageBox.warning(self, "Ошибка", "Некорректные числа")
+                return
+            res = crop_layer_api(self.current_layer_index, x, y, w, h)
+            if res.get("status") == "ok":
+                self.refresh_layers_list()
+                self.canvas.update_canvas_image()
+            else:
+                QMessageBox.warning(self, "Ошибка", res.get("error"))
+
+    def resize_canvas_dialog(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Размер холста")
+        layout = QVBoxLayout(dialog)
+        form = QFormLayout()
+        width_edit = QLineEdit("800")
+        height_edit = QLineEdit("600")
+        anchor_combo = QComboBox()
+        anchor_combo.addItems(["center", "top-left", "bottom-right"])
+        form.addRow("Ширина:", width_edit)
+        form.addRow("Высота:", height_edit)
+        form.addRow("Якорь:", anchor_combo)
+        layout.addLayout(form)
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        if dialog.exec() == QDialog.Accepted:
+            try:
+                new_w = int(width_edit.text())
+                new_h = int(height_edit.text())
+                anchor = anchor_combo.currentText()
+            except:
+                QMessageBox.warning(self, "Ошибка", "Некорректные числа")
+                return
+            res = resize_canvas_api(new_w, new_h, anchor)
+            if res.get("status") == "ok":
+                self.refresh_layers_list()
+                self.canvas.update_canvas_image()
+                QMessageBox.information(self, "Успех", f"Холст изменён на {new_w}x{new_h}")
+            else:
+                QMessageBox.warning(self, "Ошибка", res.get("error"))
+
+    def brightness_plus(self):
+        if self.current_layer_index is None:
+            QMessageBox.warning(self, "Ошибка", "Выберите слой")
+            return
+        res = apply_filter_to_layer_api(self.current_layer_index, "brightness", 10)
+        if res.get("status") == "ok":
+            self.canvas.update_canvas_image()
+        else:
+            QMessageBox.warning(self, "Ошибка", res.get("error"))
+
+    def brightness_minus(self):
+        if self.current_layer_index is None:
+            QMessageBox.warning(self, "Ошибка", "Выберите слой")
+            return
+        res = apply_filter_to_layer_api(self.current_layer_index, "brightness", -10)
+        if res.get("status") == "ok":
+            self.canvas.update_canvas_image()
+        else:
+            QMessageBox.warning(self, "Ошибка", res.get("error"))
+
+    def contrast_plus(self):
+        if self.current_layer_index is None:
+            QMessageBox.warning(self, "Ошибка", "Выберите слой")
+            return
+        res = apply_filter_to_layer_api(self.current_layer_index, "contrast", 10)
+        if res.get("status") == "ok":
+            self.canvas.update_canvas_image()
+        else:
+            QMessageBox.warning(self, "Ошибка", res.get("error"))
+
+    def contrast_minus(self):
+        if self.current_layer_index is None:
+            QMessageBox.warning(self, "Ошибка", "Выберите слой")
+            return
+        res = apply_filter_to_layer_api(self.current_layer_index, "contrast", -10)
+        if res.get("status") == "ok":
+            self.canvas.update_canvas_image()
+        else:
+            QMessageBox.warning(self, "Ошибка", res.get("error"))
+
+# ----------------------------------------------------------------------
+# Точка входа
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Graphitium графический редактор")
+    parser.add_argument("--open-project-id", help="Открыть проект по ID из облака")
+    args = parser.parse_args()
+
     app = QApplication(sys.argv)
 
     app.setStyleSheet("""
-        QMainWindow { background-color: #2b2b2b; }
-        QMenuBar { background-color: #3c3c3c; color: #ffffff; }
+        QMainWindow { background-color: #0a0a0a; }
+        QMenuBar { background-color: #1a1a1a; color: #e0e0e0; }
         QMenuBar::item:selected { background-color: #85ADFF; }
-        QMenu { background-color: #3c3c3c; color: #ffffff; }
+        QMenu { background-color: #1a1a1a; color: #e0e0e0; }
         QMenu::item:selected { background-color: #85ADFF; }
-        QToolBar { background-color: #3c3c3c; border: none; spacing: 3px; }
-        QToolButton { background-color: #3c3c3c; color: #ffffff; border-radius: 4px; padding: 4px; }
-        QToolButton:hover { background-color: #4a4a4a; }
+        QToolBar { background-color: #1a1a1a; border: none; spacing: 3px; }
+        QToolButton { background-color: #1a1a1a; color: #e0e0e0; border-radius: 4px; padding: 4px; }
+        QToolButton:hover { background-color: #2a2a2a; }
         QToolButton:pressed { background-color: #85ADFF; }
-        QDockWidget { background-color: #3c3c3c; }
-        QDockWidget::title { background-color: #4a4a4a; color: #ffffff; text-align: left; padding: 4px; }
-        QWidget { background-color: #3c3c3c; color: #ffffff; }
-        QPushButton { background-color: #4a4a4a; color: #ffffff; border: 1px solid #5a5a5a; border-radius: 4px; padding: 4px 8px; }
-        QPushButton:hover { background-color: #5a5a5a; }
+        QDockWidget { background-color: #1a1a1a; }
+        QDockWidget::title { background-color: #2a2a2a; color: #e0e0e0; text-align: left; padding: 4px; }
+        QWidget { background-color: #1a1a1a; color: #e0e0e0; }
+        QPushButton { background-color: #2a2a2a; color: #e0e0e0; border: 1px solid #3a3a3a; border-radius: 4px; padding: 4px 8px; }
+        QPushButton:hover { background-color: #3a3a3a; }
         QPushButton:pressed { background-color: #85ADFF; }
-        QSlider::groove:horizontal { height: 6px; background: #5a5a5a; border-radius: 3px; }
+        QSlider::groove:horizontal { height: 6px; background: #3a3a3a; border-radius: 3px; }
         QSlider::handle:horizontal { background: #85ADFF; width: 14px; border-radius: 7px; margin: -4px 0; }
-        QComboBox { background-color: #4a4a4a; color: #ffffff; border: 1px solid #5a5a5a; border-radius: 4px; padding: 4px; }
+        QComboBox { background-color: #2a2a2a; color: #e0e0e0; border: 1px solid #3a3a3a; border-radius: 4px; padding: 4px; }
         QComboBox::drop-down { border: none; }
-        QComboBox QAbstractItemView { background-color: #4a4a4a; color: #ffffff; }
-        QListWidget { background-color: #3c3c3c; color: #ffffff; border: 1px solid #5a5a5a; }
+        QComboBox QAbstractItemView { background-color: #2a2a2a; color: #e0e0e0; }
+        QListWidget { background-color: #1a1a1a; color: #e0e0e0; border: 1px solid #3a3a3a; }
         QListWidget::item:selected { background-color: #85ADFF; }
-        QStatusBar { background-color: #2b2b2b; color: #ffffff; }
-        QScrollBar:vertical { background: #2b2b2b; width: 12px; border-radius: 6px; }
+        QStatusBar { background-color: #0a0a0a; color: #e0e0e0; }
+        QScrollBar:vertical { background: #1a1a1a; width: 12px; border-radius: 6px; }
         QScrollBar::handle:vertical { background: #85ADFF; border-radius: 6px; min-height: 20px; }
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
         QGraphicsView { background-color: #ffffff; }
     """)
 
-    window = MainWindow()
+    window = MainWindow(open_project_id=args.open_project_id)
     window.show()
     sys.exit(app.exec())

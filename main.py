@@ -8,10 +8,10 @@ from PySide6.QtWidgets import (
     QDockWidget, QWidget, QVBoxLayout, QSlider, QComboBox, QLabel,
     QListWidget, QListWidgetItem, QPushButton, QHBoxLayout,
     QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QInputDialog, QMessageBox, QColorDialog, QDialog, QDialogButtonBox,
-    QLineEdit, QTabWidget, QFrame, QFileDialog
+    QLineEdit, QTabWidget, QFrame, QFileDialog, QFormLayout, QRubberBand
 )
 from PySide6 import QtCore
-from PySide6.QtCore import Qt, QPointF, QUrl, QTimer
+from PySide6.QtCore import Qt, QPointF, QUrl, QTimer, QRect
 from PySide6.QtGui import QPainter, QMouseEvent, QPen, QColor, QBrush, QWheelEvent, QIcon, QPixmap, QDesktopServices, QGuiApplication, QKeySequence
 
 from api.editor_api import (
@@ -270,7 +270,7 @@ class TemplateDialog(QDialog):
         return None
 
 # ----------------------------------------------------------------------
-# Холст (Canvas) – исправлен wheelEvent + ластик через erase_on_layer + заливка
+# Холст (Canvas) – добавлен инструмент выделения
 # ----------------------------------------------------------------------
 class Canvas(QGraphicsView):
     def __init__(self, parent=None):
@@ -304,6 +304,10 @@ class Canvas(QGraphicsView):
         self.setFocusPolicy(Qt.StrongFocus)
 
         self.current_zoom = 1.0
+
+        # Переменные для выделения
+        self.select_start_pos = None
+        self.select_rubber_band = None
 
     def set_tool(self, tool):
         self.current_tool = tool
@@ -375,7 +379,6 @@ class Canvas(QGraphicsView):
         delta = event.angleDelta().y()
         if abs(delta) < 1:
             return
-        # Если дельта положительная – увеличиваем, отрицательная – уменьшаем
         if delta > 0:
             factor = 1.1
         else:
@@ -416,9 +419,19 @@ class Canvas(QGraphicsView):
 
     def mousePressEvent(self, event: QMouseEvent):
         if event.button() == Qt.LeftButton:
+            # Инструмент выделения
+            if self.current_tool == "select":
+                self.select_start_pos = event.pos()
+                if not self.select_rubber_band:
+                    self.select_rubber_band = QRubberBand(QRubberBand.Rectangle, self)
+                self.select_rubber_band.setGeometry(QRect(self.select_start_pos, self.select_start_pos))
+                self.select_rubber_band.show()
+                return
+            # Текст
             if self.current_tool == "text":
                 self.add_text_at_position(self.mapToScene(event.pos()))
                 return
+            # Перемещение
             elif self.current_tool == "move":
                 self.move_start_pos = event.pos()
                 layers_info = get_layers()
@@ -427,12 +440,14 @@ class Canvas(QGraphicsView):
                     self.move_start_xy = (layer.get("x", 0), layer.get("y", 0))
                 self.drawing = True
                 return
+            # Пипетка
             elif self.current_tool == "eyedropper":
                 color = self.get_color_at_position(event.pos())
                 self.set_brush_color(color)
                 self.current_tool = "brush"
                 QMessageBox.information(self.window(), "Пипетка", f"Выбран цвет: {color}")
                 return
+            # Заливка
             elif self.current_tool == "flood_fill":
                 if not FLOOD_FILL_SUPPORT:
                     QMessageBox.warning(self.window(), "Ошибка", "Функция заливки ещё не добавлена в бэкенд.")
@@ -445,6 +460,7 @@ class Canvas(QGraphicsView):
                 else:
                     QMessageBox.warning(self.window(), "Ошибка", res.get("error", "Заливка не удалась"))
                 return
+            # Рисование кистью/ластиком/фигурами
             self.drawing = True
             self.start_point = self.mapToScene(event.pos())
             self.end_point = self.start_point
@@ -452,14 +468,21 @@ class Canvas(QGraphicsView):
                 self.draw_point(self.start_point)
 
     def mouseMoveEvent(self, event: QMouseEvent):
+        # Выделение
+        if self.current_tool == "select" and self.select_start_pos and self.select_rubber_band:
+            rect = QRect(self.select_start_pos, event.pos()).normalized()
+            self.select_rubber_band.setGeometry(rect)
+            return
+        # Перемещение слоя
+        if self.drawing and self.current_tool == "move" and self.move_start_pos:
+            delta = event.pos() - self.move_start_pos
+            new_x = self.move_start_xy[0] + delta.x()
+            new_y = self.move_start_xy[1] + delta.y()
+            set_layer_position(self.current_layer_index, new_x, new_y)
+            self.update_canvas_image()
+            return
+        # Рисование линий и прочего
         if self.drawing:
-            if self.current_tool == "move" and self.move_start_pos:
-                delta = event.pos() - self.move_start_pos
-                new_x = self.move_start_xy[0] + delta.x()
-                new_y = self.move_start_xy[1] + delta.y()
-                set_layer_position(self.current_layer_index, new_x, new_y)
-                self.update_canvas_image()
-                return
             current_point = self.mapToScene(event.pos())
             if self.current_tool == "brush" or self.current_tool == "eraser":
                 self.draw_line(self.end_point, current_point)
@@ -471,18 +494,44 @@ class Canvas(QGraphicsView):
                 main_window.update_coords(event.pos())
 
     def mouseReleaseEvent(self, event: QMouseEvent):
-        if event.button() == Qt.LeftButton and self.drawing:
-            self.drawing = False
-            if self.current_tool == "rectangle":
-                self.draw_rectangle(self.start_point, self.end_point)
-            elif self.current_tool == "circle":
-                self.draw_circle(self.start_point, self.end_point)
-            elif self.current_tool == "line":
-                self.draw_line_shape(self.start_point, self.end_point)
-            elif self.current_tool == "move":
-                self.move_start_pos = None
-                self.move_start_xy = None
-            self.update_canvas_image()
+        if event.button() == Qt.LeftButton:
+            # Завершение выделения
+            if self.current_tool == "select" and self.select_start_pos and self.select_rubber_band:
+                rect = self.select_rubber_band.geometry()
+                self.select_rubber_band.hide()
+                self.select_rubber_band.deleteLater()
+                self.select_rubber_band = None
+                # Координаты выделения в сцене
+                top_left = self.mapToScene(rect.topLeft())
+                bottom_right = self.mapToScene(rect.bottomRight())
+                x = int(top_left.x())
+                y = int(top_left.y())
+                w = int(bottom_right.x() - top_left.x())
+                h = int(bottom_right.y() - top_left.y())
+                if w > 0 and h > 0:
+                    res = crop_layer_api(self.current_layer_index, x, y, w, h)
+                    if res.get("status") == "ok":
+                        self.update_canvas_image()
+                        main_window = self.window()
+                        if hasattr(main_window, 'refresh_layers_list'):
+                            main_window.refresh_layers_list()
+                    else:
+                        QMessageBox.warning(self, "Ошибка", res.get("error", "Не удалось обрезать слой"))
+                self.select_start_pos = None
+                return
+            # Завершение обычного рисования
+            if self.drawing:
+                self.drawing = False
+                if self.current_tool == "rectangle":
+                    self.draw_rectangle(self.start_point, self.end_point)
+                elif self.current_tool == "circle":
+                    self.draw_circle(self.start_point, self.end_point)
+                elif self.current_tool == "line":
+                    self.draw_line_shape(self.start_point, self.end_point)
+                elif self.current_tool == "move":
+                    self.move_start_pos = None
+                    self.move_start_xy = None
+                self.update_canvas_image()
 
     def add_text_at_position(self, point):
         x, y = int(point.x()), int(point.y())
@@ -631,7 +680,7 @@ class MainWindow(QMainWindow):
         rotate_menu.addAction("Произвольный...").triggered.connect(self.rotate_arbitrary)
         layer_menu.addSeparator()
         layer_menu.addAction("Масштабировать...").triggered.connect(self.scale_layer)
-        layer_menu.addAction("Обрезать...").triggered.connect(self.crop_layer)
+        layer_menu.addAction("Обрезать...").triggered.connect(self.crop_layer)   # старый диалог
         layer_menu.addSeparator()
         # Фильтры
         filters_menu = layer_menu.addMenu("Фильтры")
@@ -714,7 +763,8 @@ class MainWindow(QMainWindow):
             "Круг": ("circle", "circle.png"),
             "Текст": ("text", "type-outline.png"),
             "Заливка": ("flood_fill", "paint-bucket-2.png"),
-            "AI": ("ai", "bot.png"),   # <--- ИСПРАВЛЕНО: добавлен ключ "ai"
+            "Выделение": ("select", "pruning.png"),   # <--- НОВАЯ КНОПКА
+            "AI": ("ai", "bot.png"),
             "Удалить фон": ("remove_bg", "background.remover.png"),
             "Перемещение": ("move", "move.png"),
         }
@@ -743,12 +793,13 @@ class MainWindow(QMainWindow):
                 act.triggered.connect(lambda: self.canvas.set_tool("text"))
             elif action_key == "flood_fill":
                 act.triggered.connect(lambda: self.canvas.set_tool("flood_fill"))
+            elif action_key == "select":                      # <--- ОБРАБОТКА ВЫДЕЛЕНИЯ
+                act.triggered.connect(lambda: self.canvas.set_tool("select"))
             elif action_key == "remove_bg":
                 act.triggered.connect(self.remove_background)
             elif action_key == "move":
                 act.triggered.connect(lambda: self.canvas.set_tool("move"))
             elif action_key == "ai":
-                # Правильный вызов AI
                 act.triggered.connect(lambda: handle_ai_generation(self))
             else:
                 act.triggered.connect(lambda _, n=name: print(f"Инструмент '{n}' пока не реализован"))
@@ -1154,7 +1205,7 @@ class MainWindow(QMainWindow):
         finally:
             QApplication.restoreOverrideCursor()
 
-    # ---------------------- НОВЫЕ МЕТОДЫ (экспорт PNG, импорт PSD, PDF, фильтры, повороты, масштаб, обрезка, размер холста) ----------------------
+    
     def export_png(self):
         filepath, _ = QFileDialog.getSaveFileName(self, "Сохранить PNG", "", "PNG files (*.png)")
         if filepath:
@@ -1353,8 +1404,7 @@ class MainWindow(QMainWindow):
         else:
             QMessageBox.warning(self, "Ошибка", res.get("error"))
 
-# ----------------------------------------------------------------------
-# Точка входа
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Graphitium графический редактор")
     parser.add_argument("--open-project-id", help="Открыть проект по ID из облака")

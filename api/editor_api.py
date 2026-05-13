@@ -85,7 +85,7 @@ def set_layer_visibility(layer_index: int, visible: bool) -> Dict[str, Any]:
         return {"error": "No active project"}
     
     if 0 <= layer_index < len(_current_project.layers):
-        _current_project._save_to_history()  # ← ДО
+        _current_project._save_to_history()
         _current_project.layers[layer_index].set_visibility(visible)
         return {"status": "ok"}
     return {"error": "Invalid layer index"}
@@ -97,10 +97,9 @@ def set_layer_opacity(layer_index: int, opacity: int) -> Dict[str, Any]:
         return {"error": "No active project"}
     
     if 0 <= layer_index < len(_current_project.layers):
-        _current_project._save_to_history()  # ← ДО
+        _current_project._save_to_history()
         _current_project.layers[layer_index].set_opacity(opacity)
         return {"status": "ok"}
-
 
 
 def set_layer_blend_mode(layer_index: int, blend_mode: str) -> Dict[str, Any]:
@@ -109,7 +108,7 @@ def set_layer_blend_mode(layer_index: int, blend_mode: str) -> Dict[str, Any]:
         return {"error": "No active project"}
     
     if 0 <= layer_index < len(_current_project.layers):
-        _current_project._save_to_history()  # ← ДО
+        _current_project._save_to_history()
         _current_project.layers[layer_index].set_blend_mode(blend_mode)
         return {"status": "ok"}
     return {"error": "Invalid layer index"}
@@ -158,7 +157,7 @@ def set_layer_position(layer_index: int, x: int, y: int) -> Dict[str, Any]:
         return {"error": "No active project"}
     
     if 0 <= layer_index < len(_current_project.layers):
-        _current_project._save_to_history()  # ← ДО
+        _current_project._save_to_history()
         _current_project.layers[layer_index].x = x
         _current_project.layers[layer_index].y = y
         return {"status": "ok"}
@@ -230,7 +229,6 @@ def redo() -> Dict[str, Any]:
     return {"error": "Nothing to redo"}
 
 def apply_filter_to_layer_api(layer_index: int, filter_type: str, value: int) -> Dict[str, Any]:
-    
     global _current_project
     if _current_project is None:
         return {"error": "No active project"}
@@ -250,7 +248,6 @@ def apply_filter_to_layer_api(layer_index: int, filter_type: str, value: int) ->
         return {"error": f"Failed to apply filter: {str(e)}"}
     
 def rotate_layer_api(layer_index: int, angle: float) -> Dict[str, Any]:
-    
     global _current_project
     if _current_project is None:
         return {"error": "No active project"}
@@ -270,74 +267,6 @@ def rotate_layer_api(layer_index: int, angle: float) -> Dict[str, Any]:
         return {"error": f"Failed to rotate: {str(e)}"}
 
 def scale_layer_api(layer_index: int, scale_x: float, scale_y: float = None) -> Dict[str, Any]:
-    global _current_project
-    if _current_project is None:
-        return {"error": "No active project"}
-    
-    if not (0 <= layer_index < len(_current_project.layers)):
-        return {"error": "Invalid layer index"}
-    
-    layer = _current_project.layers[layer_index]
-    if layer.image is None:
-        return {"error": "Layer has no image"}
-    
-    try:
-        old_width, old_height = layer.image.size
-        layer.image = scale_layer(layer.image, scale_x, scale_y)
-        new_width, new_height = layer.image.size
-        
-        layer.x = int(layer.x * (new_width / old_width))
-        layer.y = int(layer.y * (new_height / old_height))
-        
-        _current_project._save_to_history()
-        return {"status": "ok", "scale_x": scale_x, "scale_y": scale_y or scale_x}
-    except Exception as e:
-        return {"error": f"Failed to scale: {str(e)}"}
-
-def apply_filter_to_layer_api(layer_index: int, filter_type: str, value: int) -> Dict[str, Any]:
-   
-    global _current_project
-    if _current_project is None:
-        return {"error": "No active project"}
-    
-    if not (0 <= layer_index < len(_current_project.layers)):
-        return {"error": "Invalid layer index"}
-    
-    layer = _current_project.layers[layer_index]
-    if layer.image is None:
-        return {"error": "Layer has no image"}
-    
-    try:
-        layer.image = apply_filter_to_layer(layer.image, filter_type, value)
-        _current_project._save_to_history()
-        return {"status": "ok", "filter": filter_type, "value": value}
-    except Exception as e:
-        return {"error": f"Failed to apply filter: {str(e)}"}
-
-
-def rotate_layer_api(layer_index: int, angle: float) -> Dict[str, Any]:
-  
-    global _current_project
-    if _current_project is None:
-        return {"error": "No active project"}
-    
-    if not (0 <= layer_index < len(_current_project.layers)):
-        return {"error": "Invalid layer index"}
-    
-    layer = _current_project.layers[layer_index]
-    if layer.image is None:
-        return {"error": "Layer has no image"}
-    
-    try:
-        layer.image = rotate_layer(layer.image, angle)
-        _current_project._save_to_history()
-        return {"status": "ok", "angle": angle}
-    except Exception as e:
-        return {"error": f"Failed to rotate: {str(e)}"}
-
-
-def scale_layer_api(layer_index: int, scale_x: float, scale_y: float = None) -> Dict[str, Any]:
-    
     global _current_project
     if _current_project is None:
         return {"error": "No active project"}
@@ -397,7 +326,6 @@ def export_project_to_cloud() -> Dict[str, Any]:
 
 
 def import_project_from_cloud(json_data: Dict[str, Any]) -> Dict[str, Any]:
-    
     global _current_project
     
     try:
@@ -431,75 +359,103 @@ def import_project_from_cloud(json_data: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as e:
         return {"error": f"Failed to import project: {str(e)}"}
 
+# ==================== ИСПРАВЛЕННАЯ ОБРЕЗКА СЛОЯ ====================
 def crop_layer_api(layer_index: int, x: int, y: int, width: int, height: int) -> Dict[str, Any]:
-    
     global _current_project
     if _current_project is None:
         return {"error": "No active project"}
-    
     if not (0 <= layer_index < len(_current_project.layers)):
         return {"error": "Invalid layer index"}
-    
     layer = _current_project.layers[layer_index]
     if layer.image is None:
         return {"error": "Layer has no image"}
-    
+
+    # Координаты обрезки на холсте (x, y) нужно перевести в координаты слоя
+    # (потому что слой может быть сдвинут)
+    offset_x = layer.x
+    offset_y = layer.y
+    local_x = x - offset_x
+    local_y = y - offset_y
+
+    img_width, img_height = layer.image.size
+    # Нормализуем, чтобы не вылезать за края
+    crop_x = max(0, min(local_x, img_width - 1))
+    crop_y = max(0, min(local_y, img_height - 1))
+    crop_w = max(1, min(width, img_width - crop_x))
+    crop_h = max(1, min(height, img_height - crop_y))
+
+    if crop_w <= 0 or crop_h <= 0:
+        return {"error": "Invalid crop dimensions"}
+
     try:
-        old_width, old_height = layer.image.size
-        layer.image = crop_layer(layer.image, x, y, width, height)
-        
-        layer.x = layer.x + x
-        layer.y = layer.y + y
-        
+        cropped = layer.image.crop((crop_x, crop_y, crop_x + crop_w, crop_y + crop_h))
+        layer.image = cropped
+        # Позиция слоя на холсте не меняется (верхний левый угол обрезанного изображения остаётся там, где был)
+        # layer.x и layer.y не трогаем
         _current_project._save_to_history()
-        return {"status": "ok", "new_width": layer.image.width, "new_height": layer.image.height}
+        return {"status": "ok", "new_width": cropped.width, "new_height": cropped.height}
     except Exception as e:
         return {"error": f"Failed to crop: {str(e)}"}
-    
-def resize_canvas_api(new_width: int, new_height: int, anchor: str = "center") -> Dict[str, Any]:
-    
-    global _current_project
-    if _current_project is None:
-        return {"error": "No active project"}
-    
-    try:
-        _current_project.resize_canvas(new_width, new_height, anchor)
-        return {"status": "ok", "width": new_width, "height": new_height}
-    except Exception as e:
-        return {"error": f"Failed to resize canvas: {str(e)}"}
 
+# ==================== ИСПРАВЛЕННЫЙ ИМПОРТ PSD ====================
 def import_psd(filepath: str) -> Dict[str, Any]:
     global _current_project
-    
     try:
         from psd_tools import PSDImage
-        
         psd = PSDImage.open(filepath)
-        
         _current_project = Project(psd.width, psd.height)
-        
-        for i, layer in enumerate(psd.layers):
-            if layer.has_thumbnail():
-                img = layer.thumbnail()
-            else:
+
+        added = 0
+
+        def add_layer_recursive(layer, parent_x=0, parent_y=0):
+            nonlocal added
+            # Пропускаем пустые группы?
+            # Получаем смещение слоя относительно родителя
+            off_x = parent_x + (layer.offset[0] if hasattr(layer, 'offset') else 0)
+            off_y = parent_y + (layer.offset[1] if hasattr(layer, 'offset') else 0)
+
+            # Если это группа, рекурсивно обрабатываем её детей
+            if hasattr(layer, 'is_group') and layer.is_group():
+                for child in layer:
+                    add_layer_recursive(child, off_x, off_y)
+                return
+
+            # Пытаемся получить изображение слоя
+            img = None
+            if hasattr(layer, 'composite'):
                 img = layer.composite()
-            
-            if hasattr(img, 'convert'):
+            if img is None and hasattr(layer, 'topil'):
+                img = layer.topil()
+            if img is None and hasattr(layer, 'as_PIL'):
+                img = layer.as_PIL()
+
+            if img is None:
+                print(f"Warning: layer '{layer.name}' has no image data")
+                return
+
+            # Конвертируем в RGBA
+            try:
                 pil_img = img.convert('RGBA')
-            else:
-                pil_img = Image.fromarray(img).convert('RGBA')
-            
-            new_layer = Layer(layer.name or f"Слой {i+1}", pil_img)
-            new_layer.x = layer.offset[0]
-            new_layer.y = layer.offset[1]
+            except:
+                pil_img = img
+
+            new_layer = Layer(layer.name or f"Слой {added+1}", pil_img)
+            new_layer.x = off_x
+            new_layer.y = off_y
             new_layer.opacity = int(layer.opacity * 100) if hasattr(layer, 'opacity') else 100
             new_layer.visible = layer.visible if hasattr(layer, 'visible') else True
-            
             _current_project.add_layer(new_layer)
-        
+            added += 1
+            print(f"Added layer: {layer.name}, offset=({off_x},{off_y})")
+
+        # Обрабатываем корневые слои
+        for layer in psd:
+            add_layer_recursive(layer)
+
+        print(f"Total layers added: {added}")
         _current_project._save_to_history()
-        return {"status": "ok", "layers": len(_current_project.layers), "width": psd.width, "height": psd.height}
-    
+        return {"status": "ok", "layers": added, "width": psd.width, "height": psd.height}
+
     except ImportError:
         return {"error": "psd-tools not installed. Run: pip install psd-tools"}
     except Exception as e:
@@ -612,7 +568,7 @@ def draw_line_on_layer(layer_index: int, x1: int, y1: int, x2: int, y2: int, col
     try:
         draw = ImageDraw.Draw(layer.image)
         draw.line([x1, y1, x2, y2], fill=color, width=size)
-        _current_project._save_to_history()  # ← ПОСЛЕ
+        _current_project._save_to_history()
         return {"status": "ok"}
     except Exception as e:
         return {"error": f"Failed to draw line: {str(e)}"}
@@ -704,8 +660,6 @@ def erase_on_layer(layer_index: int, x: int, y: int, size: int = 10) -> Dict[str
         return {"status": "ok", "x": x, "y": y, "size": size}
     except Exception as e:
         return {"error": f"Failed to erase: {str(e)}"}
-    
-set_layer_opacity
 
 def flood_fill_api(layer_index: int, x: int, y: int, new_color: str, tolerance: int = 0) -> Dict[str, Any]:
     global _current_project
@@ -741,3 +695,15 @@ def flood_fill_api(layer_index: int, x: int, y: int, new_color: str, tolerance: 
     
     except Exception as e:
         return {"error": f"Failed to flood fill: {str(e)}"}
+
+# Функция resize_canvas_api (она уже правильная, вызывает метод Project)
+def resize_canvas_api(new_width: int, new_height: int, anchor: str = "center") -> Dict[str, Any]:
+    global _current_project
+    if _current_project is None:
+        return {"error": "No active project"}
+    
+    try:
+        _current_project.resize_canvas(new_width, new_height, anchor)
+        return {"status": "ok", "width": new_width, "height": new_height}
+    except Exception as e:
+        return {"error": f"Failed to resize canvas: {str(e)}"}

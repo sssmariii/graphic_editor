@@ -50,12 +50,12 @@ except ImportError:
     FLOOD_FILL_SUPPORT = False
     print("⚠️ Функция flood_fill_api не найдена. Заливка будет недоступна.")
 
-# AI интеграция
+
 from ai_integration import handle_ai_generation
 
-# ----------------------------------------------------------------------
-# Диалог входа / регистрации (без изменений)
-# ----------------------------------------------------------------------
+
+
+
 class LoginDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -214,9 +214,7 @@ class LoginDialog(QDialog):
         else:
             QMessageBox.warning(self, "Ошибка", res.get("error", "Ошибка регистрации"))
 
-# ----------------------------------------------------------------------
-# Диалог выбора шаблона (без изменений)
-# ----------------------------------------------------------------------
+
 class TemplateDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -269,9 +267,7 @@ class TemplateDialog(QDialog):
             return self.templates[idx]
         return None
 
-# ----------------------------------------------------------------------
-# Холст (Canvas) – добавлен инструмент выделения
-# ----------------------------------------------------------------------
+
 class Canvas(QGraphicsView):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -639,10 +635,10 @@ class MainWindow(QMainWindow):
             self.refresh_layers_list()
             self.canvas.update_canvas_image()
 
-    # ---------------------- Меню (расширенное) ----------------------
+    
     def _create_menu_bar(self):
         menubar = self.menuBar()
-        # Файл
+        
         file_menu = menubar.addMenu("&Файл")
         file_menu.addAction("Новый").triggered.connect(self.new_project_from_template)
         file_menu.addAction("Открыть...").triggered.connect(self.open_project_local)
@@ -654,7 +650,7 @@ class MainWindow(QMainWindow):
         file_menu.addSeparator()
         file_menu.addAction("Выход").triggered.connect(self.close)
 
-        # Правка
+        
         edit_menu = menubar.addMenu("&Правка")
         self.undo_act = edit_menu.addAction("Отменить")
         self.undo_act.setShortcut(QKeySequence.Undo)
@@ -666,13 +662,13 @@ class MainWindow(QMainWindow):
         ])
         self.redo_act.triggered.connect(self.redo_action)
 
-        # Вид
+        
         view_menu = menubar.addMenu("&Вид")
         view_menu.addAction("Показать панели").triggered.connect(self.toggle_panels)
 
-        # Слой (новое)
+        
         layer_menu = menubar.addMenu("&Слой")
-        # Поворот
+        
         rotate_menu = layer_menu.addMenu("Повернуть")
         rotate_menu.addAction("90° по часовой").triggered.connect(self.rotate_90_cw)
         rotate_menu.addAction("90° против часовой").triggered.connect(self.rotate_90_ccw)
@@ -682,7 +678,7 @@ class MainWindow(QMainWindow):
         layer_menu.addAction("Масштабировать...").triggered.connect(self.scale_layer)
         layer_menu.addAction("Обрезать...").triggered.connect(self.crop_layer)   # старый диалог
         layer_menu.addSeparator()
-        # Фильтры
+        
         filters_menu = layer_menu.addMenu("Фильтры")
         brightness_menu = filters_menu.addMenu("Яркость")
         brightness_menu.addAction("+10").triggered.connect(self.brightness_plus)
@@ -691,11 +687,11 @@ class MainWindow(QMainWindow):
         contrast_menu.addAction("+10").triggered.connect(self.contrast_plus)
         contrast_menu.addAction("-10").triggered.connect(self.contrast_minus)
 
-        # Изображение (новое)
+        
         image_menu = menubar.addMenu("&Изображение")
         image_menu.addAction("Размер холста...").triggered.connect(self.resize_canvas_dialog)
 
-        # Облако
+        
         cloud_menu = menubar.addMenu("&Облако")
         cloud_menu.addAction("Сохранить в облако").triggered.connect(self.save_to_cloud)
         cloud_menu.addAction("Загрузить из облака").triggered.connect(self.load_from_cloud)
@@ -706,11 +702,11 @@ class MainWindow(QMainWindow):
         cloud_menu.addSeparator()
         cloud_menu.addAction("Поделиться").triggered.connect(self.share_project)
 
-        # Помощь
+        
         help_menu = menubar.addMenu("&Помощь")
         help_menu.addAction("О программе").triggered.connect(self.about_action)
 
-    # (Старые методы (без изменений) 
+    
     def toggle_panels(self):
         self.toolbar.setVisible(not self.toolbar.isVisible())
         for widget in self.findChildren(QDockWidget):
@@ -763,7 +759,7 @@ class MainWindow(QMainWindow):
             "Круг": ("circle", "circle.png"),
             "Текст": ("text", "type-outline.png"),
             "Заливка": ("flood_fill", "paint-bucket-2.png"),
-            "Выделение": ("select", "pruning.png"),   # <--- НОВАЯ КНОПКА
+            "Выделение": ("select", "pruning.png"),   
             "AI": ("ai", "bot.png"),
             "Удалить фон": ("remove_bg", "background.remover.png"),
             "Перемещение": ("move", "move.png"),
@@ -793,7 +789,7 @@ class MainWindow(QMainWindow):
                 act.triggered.connect(lambda: self.canvas.set_tool("text"))
             elif action_key == "flood_fill":
                 act.triggered.connect(lambda: self.canvas.set_tool("flood_fill"))
-            elif action_key == "select":                      # <--- ОБРАБОТКА ВЫДЕЛЕНИЯ
+            elif action_key == "select":                      
                 act.triggered.connect(lambda: self.canvas.set_tool("select"))
             elif action_key == "remove_bg":
                 act.triggered.connect(self.remove_background)

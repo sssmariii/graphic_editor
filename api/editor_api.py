@@ -359,7 +359,7 @@ def import_project_from_cloud(json_data: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as e:
         return {"error": f"Failed to import project: {str(e)}"}
 
-# ==================== ИСПРАВЛЕННАЯ ОБРЕЗКА СЛОЯ ====================
+
 def crop_layer_api(layer_index: int, x: int, y: int, width: int, height: int) -> Dict[str, Any]:
     global _current_project
     if _current_project is None:
@@ -370,15 +370,13 @@ def crop_layer_api(layer_index: int, x: int, y: int, width: int, height: int) ->
     if layer.image is None:
         return {"error": "Layer has no image"}
 
-    # Координаты обрезки на холсте (x, y) нужно перевести в координаты слоя
-    # (потому что слой может быть сдвинут)
     offset_x = layer.x
     offset_y = layer.y
     local_x = x - offset_x
     local_y = y - offset_y
 
     img_width, img_height = layer.image.size
-    # Нормализуем, чтобы не вылезать за края
+    
     crop_x = max(0, min(local_x, img_width - 1))
     crop_y = max(0, min(local_y, img_height - 1))
     crop_w = max(1, min(width, img_width - crop_x))
@@ -390,14 +388,13 @@ def crop_layer_api(layer_index: int, x: int, y: int, width: int, height: int) ->
     try:
         cropped = layer.image.crop((crop_x, crop_y, crop_x + crop_w, crop_y + crop_h))
         layer.image = cropped
-        # Позиция слоя на холсте не меняется (верхний левый угол обрезанного изображения остаётся там, где был)
-        # layer.x и layer.y не трогаем
+        
         _current_project._save_to_history()
         return {"status": "ok", "new_width": cropped.width, "new_height": cropped.height}
     except Exception as e:
         return {"error": f"Failed to crop: {str(e)}"}
 
-# ==================== ИСПРАВЛЕННЫЙ ИМПОРТ PSD ====================
+
 def import_psd(filepath: str) -> Dict[str, Any]:
     global _current_project
     try:
@@ -409,18 +406,17 @@ def import_psd(filepath: str) -> Dict[str, Any]:
 
         def add_layer_recursive(layer, parent_x=0, parent_y=0):
             nonlocal added
-            # Пропускаем пустые группы?
-            # Получаем смещение слоя относительно родителя
+            
             off_x = parent_x + (layer.offset[0] if hasattr(layer, 'offset') else 0)
             off_y = parent_y + (layer.offset[1] if hasattr(layer, 'offset') else 0)
 
-            # Если это группа, рекурсивно обрабатываем её детей
+            
             if hasattr(layer, 'is_group') and layer.is_group():
                 for child in layer:
                     add_layer_recursive(child, off_x, off_y)
                 return
 
-            # Пытаемся получить изображение слоя
+            
             img = None
             if hasattr(layer, 'composite'):
                 img = layer.composite()
@@ -433,7 +429,7 @@ def import_psd(filepath: str) -> Dict[str, Any]:
                 print(f"Warning: layer '{layer.name}' has no image data")
                 return
 
-            # Конвертируем в RGBA
+            
             try:
                 pil_img = img.convert('RGBA')
             except:
@@ -448,7 +444,7 @@ def import_psd(filepath: str) -> Dict[str, Any]:
             added += 1
             print(f"Added layer: {layer.name}, offset=({off_x},{off_y})")
 
-        # Обрабатываем корневые слои
+        
         for layer in psd:
             add_layer_recursive(layer)
 
@@ -696,7 +692,7 @@ def flood_fill_api(layer_index: int, x: int, y: int, new_color: str, tolerance: 
     except Exception as e:
         return {"error": f"Failed to flood fill: {str(e)}"}
 
-# Функция resize_canvas_api (она уже правильная, вызывает метод Project)
+
 def resize_canvas_api(new_width: int, new_height: int, anchor: str = "center") -> Dict[str, Any]:
     global _current_project
     if _current_project is None:

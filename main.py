@@ -130,7 +130,7 @@ class LoginDialog(QDialog):
         self.tab_widget = QTabWidget()
         self.tab_widget.setStyleSheet("QTabWidget::tab-bar { alignment: center; }")
 
-        # ---- Вкладка LOGIN ----
+        
         login_tab = QWidget()
         login_layout = QVBoxLayout(login_tab)
         login_layout.setSpacing(15)
@@ -152,7 +152,7 @@ class LoginDialog(QDialog):
         login_layout.addStretch()
         self.tab_widget.addTab(login_tab, "Login")
 
-        # ---- Вкладка SIGN UP ----
+        
         signup_tab = QWidget()
         signup_layout = QVBoxLayout(signup_tab)
         signup_layout.setSpacing(15)
@@ -301,7 +301,7 @@ class Canvas(QGraphicsView):
 
         self.current_zoom = 1.0
 
-        # Переменные для выделения
+        
         self.select_start_pos = None
         self.select_rubber_band = None
 
@@ -415,7 +415,7 @@ class Canvas(QGraphicsView):
 
     def mousePressEvent(self, event: QMouseEvent):
         if event.button() == Qt.LeftButton:
-            # Инструмент выделения
+            
             if self.current_tool == "select":
                 self.select_start_pos = event.pos()
                 if not self.select_rubber_band:
@@ -423,11 +423,11 @@ class Canvas(QGraphicsView):
                 self.select_rubber_band.setGeometry(QRect(self.select_start_pos, self.select_start_pos))
                 self.select_rubber_band.show()
                 return
-            # Текст
+            
             if self.current_tool == "text":
                 self.add_text_at_position(self.mapToScene(event.pos()))
                 return
-            # Перемещение
+            
             elif self.current_tool == "move":
                 self.move_start_pos = event.pos()
                 layers_info = get_layers()
@@ -436,14 +436,14 @@ class Canvas(QGraphicsView):
                     self.move_start_xy = (layer.get("x", 0), layer.get("y", 0))
                 self.drawing = True
                 return
-            # Пипетка
+            
             elif self.current_tool == "eyedropper":
                 color = self.get_color_at_position(event.pos())
                 self.set_brush_color(color)
                 self.current_tool = "brush"
                 QMessageBox.information(self.window(), "Пипетка", f"Выбран цвет: {color}")
                 return
-            # Заливка
+            
             elif self.current_tool == "flood_fill":
                 if not FLOOD_FILL_SUPPORT:
                     QMessageBox.warning(self.window(), "Ошибка", "Функция заливки ещё не добавлена в бэкенд.")
@@ -456,7 +456,7 @@ class Canvas(QGraphicsView):
                 else:
                     QMessageBox.warning(self.window(), "Ошибка", res.get("error", "Заливка не удалась"))
                 return
-            # Рисование кистью/ластиком/фигурами
+            
             self.drawing = True
             self.start_point = self.mapToScene(event.pos())
             self.end_point = self.start_point
@@ -464,12 +464,12 @@ class Canvas(QGraphicsView):
                 self.draw_point(self.start_point)
 
     def mouseMoveEvent(self, event: QMouseEvent):
-        # Выделение
+        
         if self.current_tool == "select" and self.select_start_pos and self.select_rubber_band:
             rect = QRect(self.select_start_pos, event.pos()).normalized()
             self.select_rubber_band.setGeometry(rect)
             return
-        # Перемещение слоя
+        
         if self.drawing and self.current_tool == "move" and self.move_start_pos:
             delta = event.pos() - self.move_start_pos
             new_x = self.move_start_xy[0] + delta.x()
@@ -477,7 +477,7 @@ class Canvas(QGraphicsView):
             set_layer_position(self.current_layer_index, new_x, new_y)
             self.update_canvas_image()
             return
-        # Рисование линий и прочего
+        
         if self.drawing:
             current_point = self.mapToScene(event.pos())
             if self.current_tool == "brush" or self.current_tool == "eraser":
@@ -491,13 +491,13 @@ class Canvas(QGraphicsView):
 
     def mouseReleaseEvent(self, event: QMouseEvent):
         if event.button() == Qt.LeftButton:
-            # Завершение выделения
+            
             if self.current_tool == "select" and self.select_start_pos and self.select_rubber_band:
                 rect = self.select_rubber_band.geometry()
                 self.select_rubber_band.hide()
                 self.select_rubber_band.deleteLater()
                 self.select_rubber_band = None
-                # Координаты выделения в сцене
+                
                 top_left = self.mapToScene(rect.topLeft())
                 bottom_right = self.mapToScene(rect.bottomRight())
                 x = int(top_left.x())
@@ -515,7 +515,7 @@ class Canvas(QGraphicsView):
                         QMessageBox.warning(self, "Ошибка", res.get("error", "Не удалось обрезать слой"))
                 self.select_start_pos = None
                 return
-            # Завершение обычного рисования
+            
             if self.drawing:
                 self.drawing = False
                 if self.current_tool == "rectangle":
@@ -592,7 +592,7 @@ class Canvas(QGraphicsView):
     def draw_line_shape(self, p1, p2):
         self.draw_line(p1, p2)
 
-# Главное окно (расширенное)
+
 
 class MainWindow(QMainWindow):
     def __init__(self, open_project_id=None):
